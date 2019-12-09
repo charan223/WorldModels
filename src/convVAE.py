@@ -57,14 +57,17 @@ class ConvVAE(nn.Module):
         self.deconv3 = nn.ConvTranspose2d(64, 32, 6, stride = 2)
         self.deconv4 = nn.ConvTranspose2d(32, 3, 6, stride = 2)
 
+        self.fc1 = nn.Linear(2 * 2 * 256, self.N_z)
+        self.fc2 = nn.Linear(2 * 2 * 256, self.N_z)
+
     def encode(self, x):
         h1 = F.relu(self.conv1(x))
         h2 = F.relu(self.conv2(h1))
         h3 = F.relu(self.conv3(h2))
         h4 = F.relu(self.conv4(h3))
-        
-        mu = nn.Linear(h4, self.N_z)
-        logvar = nn.Linear(h4, self.N_z)
+        l1 = h4.reshape(-1)
+        mu = self.fc1(l1)
+        logvar = self.fc2(l1)
 
         # we take log of var as sigma cannot be negative while neural network can output negative values
         sigma = torch.exp(logvar * 0.5)
