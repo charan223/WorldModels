@@ -1,15 +1,19 @@
 from __future__ import print_function
 import argparse
 import os
+from os.path import exists, join
 import numpy as np
+from tqdm import tqdm
+import cv2
 import torch
 import torch.utils.data
 from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
+from datasets.dataloader import load_data
 from models.convVAE import ConvVAE
-
+from utils.train_utils import save_model, load_model
 
 parser = argparse.ArgumentParser(description='ConvVAE for WorldModels')
 parser.add_argument('--batch_size', type=int, default=1, metavar='N',
@@ -26,6 +30,12 @@ parser.add_argument('--log_interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--N_z', type=int, default=32, metavar='N',
                     help='size of latent variable')
+parser.add_argument('--split', type=int, default=0.9, metavar='N',
+                    help='train size divided by dataset size(0.9 = 90/100)')
+parser.add_argument('--rollouts', type=int, default=1000, metavar='N',
+                    help='number of rollouts to be considered for training + testing')
+parser.add_argument('--model_file', type=str, default='final.pth', metavar='N',
+                    help='final model for evaluation')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -59,73 +69,127 @@ def loss_function(recon_x, x, mu, logvar):
     return L2_Loss + KL_Loss
 
 
-def train(epoch):
-    model_save_path = "torch_vae"
-    if not os.path.exists(model_save_path):
-        os.makedirs(model_save_path)
-    #dataset loading
-    dataset = create_dataset(N=10000, M=1000)
-    np.random.shuffle(dataset)
+def train(epoch, data_folder, model_file):
+    model_path = "checkpoints"
 
-    # split into batches:
-    total_length = len(dataset)
-    num_batches = int(np.floor(total_length/args.batch_size))
+    if not exists(model_path):
+        os.makedirs(model_path)
+
+    if exists(join(model_path, model_file)):
+        #TO DO: LOAD MODEL HERE and train code for left over rollouts
+        model.load_state_dict(torch.load(join(model_path, model_file)))
 
     model.train()
     train_loss = 0
 
-        
-    for batch_idx in range(num_batches):
-        batch = dataset[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
+    # if split is 0.9  train_rollouts = 900
+    train_rollouts =  args.split * args.rollouts
 
-        # as the input pixels lie between 0, 1
-        obs = batch.astype(np.float)/255.0
+    # fixed episode length for each rollout
+    ep_length = 1000
 
-        # for gradients to not accumulate
-        optimizer.zero_grad()
+    # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
+    batch_rollout_size = 100
 
-        # forward pass
-        recon_obs, mu, logvar = model(obs)
+    # num_rollout_batches = 9 
+    num_rollout_batches = train_rollouts/batch_rollout_size
 
-        #loss function
-        loss = loss_function(recon_obs, obs, mu, logvar)
+    # num_batches = 1000 * 100
+    num_batches = ep_length * batch_rollout_size/args.batch_size
 
-        # backpropagation
-        loss.backward()
+    for batch_rollout in range(num_rollout_batches):
+            # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
+            obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
+            # perform shuffling only in train
+            np.random.shuffle(obs)
 
-        train_loss += loss.item()
+            for batch_idx in range(num_batches):
+                batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
-        # update parameters based on calculated gradients
-        optimizer.step()
+                # as the input pixels lie between 0, 1
+                obs = batch.astype(np.float)/255.0
 
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(batch), len(dataset),
-                100. * batch_idx / len(dataset),
-                loss.item() / len(batch)))
+                # for gradients to not accumulate
+                optimizer.zero_grad()
+
+                # forward pass
+                recon_obs, mu, logvar = model(obs)
+
+                #loss function
+                loss = loss_function(recon_obs, obs, mu, logvar)
+
+                # backpropagation
+                loss.backward()
+
+                train_loss += loss.item()
+
+                # update parameters based on calculated gradients
+                optimizer.step()
+
+                if batch_idx % args.log_interval == 0:
+                    print('Train Epoch: {}, batch_rollout: [{}/{}] batch [{}/{}]\tLoss: {:.6f}'.format(
+                        epoch, batch_rollout, num_rollout_batches, batch_idx * len(batch), len(obs),
+                        loss.item() / len(batch)))
+            
+            # TO DO SAVE MODEL HERE
+            torch.save(model.state_dict(), join(model_path, model_file))
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
-        epoch, train_loss / len(dataset)))
+            epoch, train_loss / (train_rollouts * len(obs)) ))
 
-def test(epoch):
+def test(epoch, data_folder, model_file):
+
+    model_path = "checkpoints"
+
+    assert exists(join(model_path, model_file))
+
+    model.load_state_dict(torch.load(join(model_path, model_file)))
+
     model.eval()
     test_loss = 0
-    with torch.no_grad():
-        for i, (data, _) in enumerate(test_loader):
-            data = data.to(device)
-            recon_batch, mu, logvar = model(data)
-            test_loss += loss_function(recon_batch, data, mu, logvar).item()
-            if i == 0:
-                n = min(data.size(0), 8)
-                comparison = torch.cat([data[:n],
-                                      recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
-                save_image(comparison.cpu(),
-                         'results/reconstruction_' + str(epoch) + '.png', nrow=n)
 
-    test_loss /= len(test_loader.dataset)
-    print('====> Test set loss: {:.4f}'.format(test_loss))
+    # if split is 0.9  train_rollouts = 900
+    train_rollouts =  args.split * args.rollouts
+
+    # fixed episode length for each rollout
+    ep_length = 1000
+
+    # test rollouts = 100
+    test_rollouts = args.rollouts - train_rollouts
+
+    # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
+    batch_rollout_size = 100
+
+    # num_rollout_batches = 1 
+    num_rollout_batches = test_rollouts/batch_rollout_size
+    total_rollout_batches = args.rollouts/batch_rollout_size
+
+    # num_batches = 1000 * 100
+    num_batches = ep_length * batch_rollout_size/args.batch_size
+
+    with torch.no_grad():
+        for batch_rollout in range(total_rollout_batches - num_rollout_batches, total_rollout_batches):
+                # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
+                obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
+                
+                for batch_idx in range(num_batches):
+                    batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
+
+                    # as the input pixels lie between 0, 1
+                    obs = batch.astype(np.float)/255.0
+
+                    recon_obs, mu, logvar = model(obs)
+
+                    test_loss += loss_function(recon_obs, obs, mu, logvar).item()
+
+        test_loss = test_loss / (test_rollouts * ep_length)
+        print('====> Test set loss: {:.4f}'.format(test_loss))
 
 if __name__ == "__main__":
+
+    data_folder = "data/carracing/"
+    assert exists(data_folder)
+
     for epoch in range(1, args.epochs + 1):
-        train(epoch)
-        test(epoch)
+        train(epoch, data_folder, args.model_file)
+        test(epoch, data_folder, args.model_file)
