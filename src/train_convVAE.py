@@ -3,7 +3,6 @@ import argparse
 import os
 from os.path import exists, join
 import numpy as np
-from tqdm import tqdm
 import cv2
 import torch
 import torch.utils.data
@@ -34,6 +33,8 @@ parser.add_argument('--split', type=int, default=0.9, metavar='N',
                     help='train size divided by dataset size(0.9 = 90/100)')
 parser.add_argument('--rollouts', type=int, default=1000, metavar='N',
                     help='number of rollouts to be considered for training + testing')
+parser.add_argument('--batch_rollout_size', type=int, default=100, metavar='N',
+                    help='number of rollouts to be considered for each batch')
 parser.add_argument('--model_file', type=str, default='final.pth', metavar='N',
                     help='final model for evaluation')
 
@@ -89,7 +90,7 @@ def train(epoch, data_folder, model_file):
     ep_length = 1000
 
     # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
-    batch_rollout_size = 100
+    batch_rollout_size = args.batch_rollout_size
 
     # num_rollout_batches = 9 
     num_rollout_batches = train_rollouts/batch_rollout_size
@@ -158,7 +159,7 @@ def test(epoch, data_folder, model_file):
     test_rollouts = args.rollouts - train_rollouts
 
     # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
-    batch_rollout_size = 100
+    batch_rollout_size = args.batch_rollout_size
 
     # num_rollout_batches = 1 
     num_rollout_batches = test_rollouts/batch_rollout_size
