@@ -49,7 +49,6 @@ device = torch.device("cuda" if args.cuda else "cpu")
 
 model = ConvVAE(N_z=args.N_z,
               batch_size=args.batch_size,
-              kl_tolerance=args.kl_tolerance,
               is_training=True,
               reuse=False,
               gpu_mode=True).to(device)

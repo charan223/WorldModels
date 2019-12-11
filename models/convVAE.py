@@ -9,14 +9,13 @@ from torchvision.utils import save_image
 class ConvVAE(nn.Module):
     #Input to ConvVAE is resized to 64 * 64 * 3, each pixel has 3 float values
     # between 0, 1 to represent each of RGB channels
-    def __init__(self, N_z=32, batch_size=1, kl_tolerance=0.5, 
+    def __init__(self, N_z=32, batch_size=1, 
             is_training=False, reuse=False, gpu_mode=False):
         super(ConvVAE, self).__init__()
 
         self.N_z = N_z
         self.batch_size = batch_size
         self.is_training = is_training
-        self.kl_tolerance = kl_tolerance
         self.reuse = reuse
 
         self.conv1 = nn.Conv2d(3, 32, 4, stride = 2)
