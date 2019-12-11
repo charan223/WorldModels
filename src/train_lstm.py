@@ -4,7 +4,7 @@ from models.lstm_mdn import LSTM_MDN
 import torch
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
-from train_utils import save_model, load_model
+from utils.train_utils import save_model, load_model
 
 
 CUDA = torch.cuda.is_available()

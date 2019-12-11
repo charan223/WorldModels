@@ -17,8 +17,8 @@ class LSTM_MDN(nn.Module):
         self.n_gaussians = n_gaussians
         self.hidden_dim = hidden_dim
 
-        hidden = torch.zeros(self.num_layers, seq_size, self.hidden_units, device=DEVICE)
-        cell = torch.zeros(self.num_layers, seq_size, self.hidden_units, device=DEVICE)
+        hidden = torch.zeros(1, seq_size, self.hidden_units, device=DEVICE)
+        cell = torch.zeros(1, seq_size, self.hidden_units, device=DEVICE)
         self.hidden = hidden, cell
 
         self.fc1 = nn.Linear(self.z_dim + 1, self.hidden_dim)
