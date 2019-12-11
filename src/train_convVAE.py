@@ -107,16 +107,16 @@ def train(epoch, data_folder, model_file):
                 batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
                 # as the input pixels lie between 0, 1
-                obs = batch.astype(np.float)/255.0
+                batch_obs = batch.astype(np.float)/255.0
 
                 # for gradients to not accumulate
                 optimizer.zero_grad()
 
                 # forward pass
-                recon_obs, mu, logvar = model(obs)
+                recon_batch_obs, mu, logvar = model(batch_obs)
 
                 #loss function
-                loss = loss_function(recon_obs, obs, mu, logvar)
+                loss = loss_function(recon_batch_obs, batch_obs, mu, logvar)
 
                 # backpropagation
                 loss.backward()
@@ -176,11 +176,16 @@ def test(epoch, data_folder, model_file):
                     batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
                     # as the input pixels lie between 0, 1
-                    obs = batch.astype(np.float)/255.0
+                    batch_obs = batch.astype(np.float)/255.0
 
-                    recon_obs, mu, logvar = model(obs)
+                    batch_recon_obs, mu, logvar = model(batch_obs)
 
-                    test_loss += loss_function(recon_obs, obs, mu, logvar).item()
+                    test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
+                    
+                    if batch_idx < 3:
+                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs))
+                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs))
+
 
         test_loss = test_loss / (test_rollouts * ep_length)
         print('====> Test set loss: {:.4f}'.format(test_loss))
