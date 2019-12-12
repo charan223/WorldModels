@@ -2,6 +2,7 @@ from __future__ import print_function
 import argparse
 import os
 from os.path import exists, join
+import logging
 import numpy as np
 import cv2
 import torch
@@ -43,7 +44,8 @@ torch.manual_seed(args.seed)
 
 device = torch.device("cuda" if args.cuda else "cpu")
 
-
+logging.basicConfig(filename='results/vae_train.log', level=logging.INFO)
+logger = logging.getLogger('vae_train')
 
 model = ConvVAE(N_z=args.N_z,
               batch_size=args.batch_size,
@@ -126,14 +128,14 @@ def train(epoch, data_folder, model_file):
                 optimizer.step()
 
                 if batch_idx % args.log_interval == 0:
-                    print('Train Epoch: {}, batch_rollout: [{}/{}] batch [{}/{}]\tLoss: {:.6f}'.format(
+                    logger.info('Train Epoch: {}, batch_rollout: [{}/{}] batch [{}/{}]\tLoss: {:.6f}'.format(
                         epoch, batch_rollout, num_rollout_batches, batch_idx * len(batch), len(obs),
                         loss.item() / len(batch)))
             
             # TO DO SAVE MODEL HERE
             torch.save(model.state_dict(), join(model_path, model_file))
 
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
+    logger.info('====> Epoch: {} Average loss: {:.4f}'.format(
             epoch, train_loss / (train_rollouts * len(obs)) ))
 
 def test(epoch, data_folder, model_file):
@@ -182,14 +184,14 @@ def test(epoch, data_folder, model_file):
                     batch_recon_obs, mu, logvar = model(batch_obs)
 
                     test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
-                    
+                    '''
                     if batch_idx < 3:
                         cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
                         cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)
-                    
+                    '''
 
         test_loss = test_loss / (test_rollouts * ep_length)
-        print('====> Test set loss: {:.4f}'.format(test_loss))
+        logger.info('====> Test set loss: {:.4f}'.format(test_loss))
 
 if __name__ == "__main__":
 
