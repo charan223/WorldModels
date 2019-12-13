@@ -3,11 +3,11 @@ import gym
 import numpy as np
 import controller
 
-#create controller just visual to test (also less parameters..)
+#solver
+#create controller just visual to test (also less parameters..) DONE
 
 ##PENDING
 #Size parameters W and bias (0 to 1)?
-
 
 
 #Using this, as recommended by paper
@@ -39,7 +39,9 @@ while True:
 
     #one generation #need to do for many
     generation += 1
-    fitness_list = np.zeros(len(solutions))
+    
+    fitness_list = []
+    #fitness_list = np.zeros(len(solutions)) #this object might need to be list (solver tell)
 
     for i in range(0, len(solutions)): #loop for each of the solutions provided
     
@@ -57,15 +59,17 @@ while True:
             total_roll += rollout(controller, env) #returns cumulative score each run
         
         average_roll = total_roll/16
-        fitness_list[i] = average_roll
+        fitness_list.append(avereage_roll) #They should be appended in right order
+        #fitness_list[i] = average_roll
 
         #add function here to monitor every so often state of evo algoirthm
         
-    solver.tell(fitness_list)
+    solver.tell(fitness_list) #I think input is a list #Might need to check
     solver.logger.add()
     solver.disp()
     #Solver know
-    bestsol, bestfit = solver.result()
+    
+    bestsol, bestfit = solver.result() #acumulate?
 
     if generation == 1500:
         #exit while loop
