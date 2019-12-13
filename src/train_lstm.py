@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
 from utils.train_utils import save_model, load_model
-from generate_lstm_training import LSTMDataset
+from datasets.generate_lstm_training import LSTMDataset
 
 
 CUDA = torch.cuda.is_available()
@@ -22,17 +22,19 @@ def loss_mdn(pi, sigma, mu, y, seq_size=100, z_dim=32):
 
 def train_batch(lstm, x, weight_decay=0., lr=0.0005):
     optimizer = torch.optim.Adam(lstm.parameters(), lr=lr, weight_decay=weight_decay)
-    lstm.hidden = lstm.init_hidden(lstm.seq_size)
+    hidden = torch.zeros(1, lstm.seq_size, lstm.hidden_units, device=DEVICE)
+    cell = torch.zeros(1, lstm.seq_size, lstm.hidden_units, device=DEVICE)
+    lstm.hidden = hidden, cell
 
     ## This part was copied from dylandjian github repo
-    x = torch.cat((x['encoded'], x['actions'].view(-1, 1) / 3), dim=1)
-    x = x.view(-1, lstm.seq_size, lstm.z_dim + 1)
+    inp = torch.cat((x['encoded'], x['actions']), dim=1) #.view(-1, 1) / 3), dim=1)
+    inp = inp.view(-1, lstm.seq_size, lstm.z_dim + 3)
     last_x = x['encoded'][-1].view(-1, x['encoded'].size()[1])
     target = torch.cat((x['encoded'][1:x['encoded'].size()[0]], last_x,))
     ##
 
     optimizer.zero_grad()
-    pi, sigma, mu = lstm(x)
+    pi, sigma, mu = lstm(inp)
     loss = loss_mdn(pi, sigma, mu, target)
     loss.backward()
     optimizer.step()
@@ -42,14 +44,14 @@ def train_batch(lstm, x, weight_decay=0., lr=0.0005):
 
 ## This function was copied from dylandjian github repo
 def collate_fn(example):
-    frames = []
+    encoded = []
     actions = []
 
     for ex in example:
-        frames.extend(ex[0])
+        encoded.extend(ex[0])
         actions.extend(ex[1])
 
-    frames = torch.tensor(frames, dtype=torch.float, device=DEVICE) / 255
+    frames = torch.tensor(encoded, dtype=torch.float, device=DEVICE) / 255
     actions = torch.tensor(actions, dtype=torch.float, device=DEVICE) / 3
     return frames, actions
 ##
@@ -78,7 +80,7 @@ def train_lstm(lstm, dataset_name, max_iter=1000, load_path=None):
             if n_iter % 5 == 0:
                 print("[TRAIN] current iteration: {}, loss: {}".format(n_iter, loss))
 
-            if n_iter % 500 == 0:
+            if (n_iter + 1) % 500 == 0:
                 dir_path = './saved_models/'
                 save_model(dir_path, lstm, 'lstm', str(n_iter), str(int(time.time())), {})
 
@@ -89,4 +91,4 @@ def train_lstm(lstm, dataset_name, max_iter=1000, load_path=None):
 
 if __name__ == "__main__":
     lstm = LSTM_MDN()
-    train_lstm(lstm, "")
+    train_lstm(lstm, "lstm_data_v0", max_iter=50000)

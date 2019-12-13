@@ -21,7 +21,7 @@ class LSTM_MDN(nn.Module):
         cell = torch.zeros(1, seq_size, self.hidden_units, device=DEVICE)
         self.hidden = hidden, cell
 
-        self.fc1 = nn.Linear(self.z_dim + 1, self.hidden_dim)
+        self.fc1 = nn.Linear(self.z_dim + 3, self.hidden_dim)
         self.lstm = nn.LSTM(self.hidden_dim, self.hidden_units, 1)
         self.pi = nn.Linear(self.hidden_units, self.n_gaussians * self.z_dim)
         self.mu = nn.Linear(self.hidden_units, self.n_gaussians * self.z_dim)
