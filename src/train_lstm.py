@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
 from utils.train_utils import save_model, load_model
+from generate_lstm_training import LSTMDataset
 
 
 CUDA = torch.cuda.is_available()
@@ -54,9 +55,9 @@ def collate_fn(example):
 ##
 
 
-def train_lstm(lstm, max_iter=1000, load_path=None):
+def train_lstm(lstm, dataset_name, max_iter=1000, load_path=None):
 
-    dataset = [] #TODO
+    dataset = LSTMDataset(name=dataset_name)
     dataloader = DataLoader(dataset, batch_size=1, collate_fn=collate_fn)
 
     if load_path is not None:
@@ -88,4 +89,4 @@ def train_lstm(lstm, max_iter=1000, load_path=None):
 
 if __name__ == "__main__":
     lstm = LSTM_MDN()
-    train_lstm(lstm)
+    train_lstm(lstm, "")
