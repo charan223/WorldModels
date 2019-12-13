@@ -13,7 +13,7 @@ import controller
 #Using this, as recommended by paper
 #http://blog.otoro.net/2017/11/12/evolving-stable-strategies/
 
-def rollout(agent, env):
+def rollout(contoller, env):
     obs = env.reset()
     #VAE should encode obs
     done = False
@@ -56,7 +56,7 @@ while True:
         for i in range(0,17): #Hardcoded, 17 rollouts #This could be parallelised
     
             #This will not run, outputs will not match
-            total_roll += rollout(controller, env) #returns cumulative score each run
+            total_roll += rollout(k, env) #returns cumulative score each run
         
         average_roll = total_roll/16
         fitness_list.append(avereage_roll) #They should be appended in right order
