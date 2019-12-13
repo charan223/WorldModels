@@ -48,7 +48,7 @@ def generate_lstm_data(name, vae_file, nb_rollouts=1000):
                 batch = np.array([cv2.resize(ob, (64, 64))]).astype(np.float)/255.0
                 batch = torch.from_numpy(batch).permute(0,3,1,2).float()
                 z, mu, logvar = vae.encode(batch)
-                obs.append((mu, logvar))
+                obs.append((mu.numpy(), logvar.numpy()))
             encoded.append(obs)
     with open(save_path, 'wb') as f:
         np.savez(f, encoded=encoded, actions=act)
