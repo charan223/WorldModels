@@ -47,16 +47,16 @@ class Controller:
     def action (self):
         #apply function to keep within boundaries?
         conc = np.concatenate((self.visual, self.hidden))
-        action = np.dot(self.weights, conc ) + self.bias
+        action_vector = np.dot(self.weights, conc ) + self.bias
         
         #action[0] = clip(action[0], 1, -1)
-        action[0] = np.tanh(action[0])
+        action_vector[0] = np.tanh(action_vector[0])
         #action[1] = clip(action[1], 1, 0)
-        action[1] = (np.tanh(action[1]) + 1) / 2
+        action_vector[1] = (np.tanh(action_vector[1]) + 1) / 2
         #action[2] = clip(action[2], 2, 0)
-        action[2] = (np.tanh(action[2]) + 1) / 2
+        action_vector[2] = (np.tanh(action_vector[2]) + 1) / 2
         
-        return action
+        return action_vector
     
     def action_rand(self):
         r = np.random.rand(3,)
@@ -100,18 +100,19 @@ class Controller_VAE:
     def action (self):
         #apply function to keep within boundaries?
         #paer says tnah nonlinearities (does not expecify much)
-        
+        print(self.visual)
+        print(self.padding)
         conc = np.concatenate((self.visual, self.padding))
-        action = np.dot(self.weights, conc ) + self.bias
+        action_vector = np.dot(self.weights, conc ) + self.bias
         
         #action[0] = clip(action[0], 1, -1)
-        action[0] = np.tanh(action[0])
+        action_vector[0] = np.tanh(action_vector[0])
         #action[1] = clip(action[1], 1, 0)
-        action[1] = (np.tanh(action[1]) + 1) / 2
+        action_vector[1] = (np.tanh(action[1]) + 1) / 2
         #action[2] = clip(action[2], 2, 0)
-        action[2] = (np.tanh(action[2]) + 1) / 2
+        action_vector[2] = (np.tanh(action[2]) + 1) / 2
         
-        return action
+        return action_vector
     
     def action_rand(self):
         r = np.random.rand(3,)
