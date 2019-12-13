@@ -2,15 +2,13 @@ from __future__ import print_function
 import argparse
 import os
 from os.path import exists, join
+import logging
 import numpy as np
-from tqdm import tqdm
 import cv2
 import torch
-import torch.utils.data
+from torch.utils import data
 from torch import nn, optim
 from torch.nn import functional as F
-from torchvision import datasets, transforms
-from torchvision.utils import save_image
 from datasets.dataloader import load_data
 from models.convVAE import ConvVAE
 from utils.train_utils import save_model, load_model
@@ -26,14 +24,16 @@ parser.add_argument('--lr', type=float, default=1e-4,
                     help='learning rate')                    
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log_interval', type=int, default=10, metavar='N',
+parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--N_z', type=int, default=32, metavar='N',
                     help='size of latent variable')
-parser.add_argument('--split', type=int, default=0.9, metavar='N',
+parser.add_argument('--split', type=float, default=0.9, metavar='N',
                     help='train size divided by dataset size(0.9 = 90/100)')
 parser.add_argument('--rollouts', type=int, default=1000, metavar='N',
                     help='number of rollouts to be considered for training + testing')
+parser.add_argument('--batch_rollout_size', type=int, default=100, metavar='N',
+                    help='number of rollouts to be considered for each batch')
 parser.add_argument('--model_file', type=str, default='final.pth', metavar='N',
                     help='final model for evaluation')
 
@@ -44,11 +44,11 @@ torch.manual_seed(args.seed)
 
 device = torch.device("cuda" if args.cuda else "cpu")
 
-
+logging.basicConfig(filename='results/vae_train.log', level=logging.INFO)
+logger = logging.getLogger('vae_train')
 
 model = ConvVAE(N_z=args.N_z,
               batch_size=args.batch_size,
-              kl_tolerance=args.kl_tolerance,
               is_training=True,
               reuse=False,
               gpu_mode=True).to(device)
@@ -89,25 +89,26 @@ def train(epoch, data_folder, model_file):
     ep_length = 1000
 
     # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
-    batch_rollout_size = 100
+    batch_rollout_size = args.batch_rollout_size
 
     # num_rollout_batches = 9 
-    num_rollout_batches = train_rollouts/batch_rollout_size
+    num_rollout_batches = int(train_rollouts/batch_rollout_size)
 
-    # num_batches = 1000 * 100
-    num_batches = ep_length * batch_rollout_size/args.batch_size
+    # num_batches = 1000 * 100/1
+    num_batches = int(ep_length * batch_rollout_size/args.batch_size)
 
     for batch_rollout in range(num_rollout_batches):
             # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
             obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
             # perform shuffling only in train
             np.random.shuffle(obs)
-
             for batch_idx in range(num_batches):
                 batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
                 # as the input pixels lie between 0, 1
                 batch_obs = batch.astype(np.float)/255.0
+
+                batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
 
                 # for gradients to not accumulate
                 optimizer.zero_grad()
@@ -127,14 +128,14 @@ def train(epoch, data_folder, model_file):
                 optimizer.step()
 
                 if batch_idx % args.log_interval == 0:
-                    print('Train Epoch: {}, batch_rollout: [{}/{}] batch [{}/{}]\tLoss: {:.6f}'.format(
+                    logger.info('Train Epoch: {}, batch_rollout: [{}/{}] batch [{}/{}]\tLoss: {:.6f}'.format(
                         epoch, batch_rollout, num_rollout_batches, batch_idx * len(batch), len(obs),
                         loss.item() / len(batch)))
             
             # TO DO SAVE MODEL HERE
             torch.save(model.state_dict(), join(model_path, model_file))
 
-    print('====> Epoch: {} Average loss: {:.4f}'.format(
+    logger.info('====> Epoch: {} Average loss: {:.4f}'.format(
             epoch, train_loss / (train_rollouts * len(obs)) ))
 
 def test(epoch, data_folder, model_file):
@@ -158,14 +159,14 @@ def test(epoch, data_folder, model_file):
     test_rollouts = args.rollouts - train_rollouts
 
     # load 100 rollouts at a time and shuffle among their 1000 * 100 frames
-    batch_rollout_size = 100
+    batch_rollout_size = args.batch_rollout_size
 
     # num_rollout_batches = 1 
-    num_rollout_batches = test_rollouts/batch_rollout_size
-    total_rollout_batches = args.rollouts/batch_rollout_size
+    num_rollout_batches = int(test_rollouts/batch_rollout_size)
+    total_rollout_batches = int(args.rollouts/batch_rollout_size)
 
     # num_batches = 1000 * 100
-    num_batches = ep_length * batch_rollout_size/args.batch_size
+    num_batches = int(ep_length * batch_rollout_size/args.batch_size)
 
     with torch.no_grad():
         for batch_rollout in range(total_rollout_batches - num_rollout_batches, total_rollout_batches):
@@ -178,17 +179,19 @@ def test(epoch, data_folder, model_file):
                     # as the input pixels lie between 0, 1
                     batch_obs = batch.astype(np.float)/255.0
 
+                    batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
+
                     batch_recon_obs, mu, logvar = model(batch_obs)
 
                     test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
-                    
+                    '''
                     if batch_idx < 3:
-                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs))
-                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs))
-
+                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
+                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)
+                    '''
 
         test_loss = test_loss / (test_rollouts * ep_length)
-        print('====> Test set loss: {:.4f}'.format(test_loss))
+        logger.info('====> Test set loss: {:.4f}'.format(test_loss))
 
 if __name__ == "__main__":
 

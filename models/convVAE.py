@@ -9,14 +9,13 @@ from torchvision.utils import save_image
 class ConvVAE(nn.Module):
     #Input to ConvVAE is resized to 64 * 64 * 3, each pixel has 3 float values
     # between 0, 1 to represent each of RGB channels
-    def __init__(self, N_z=32, batch_size=1, kl_tolerance=0.5, 
+    def __init__(self, N_z=32, batch_size=1, 
             is_training=False, reuse=False, gpu_mode=False):
         super(ConvVAE, self).__init__()
 
         self.N_z = N_z
         self.batch_size = batch_size
         self.is_training = is_training
-        self.kl_tolerance = kl_tolerance
         self.reuse = reuse
 
         self.conv1 = nn.Conv2d(3, 32, 4, stride = 2)
@@ -31,6 +30,8 @@ class ConvVAE(nn.Module):
 
         self.fc1 = nn.Linear(2 * 2 * 256, self.N_z)
         self.fc2 = nn.Linear(2 * 2 * 256, self.N_z)
+
+        self.fc3 = nn.Linear(self.N_z, 1024)
 
     def encode(self, x):
         h1 = F.relu(self.conv1(x))
@@ -49,10 +50,12 @@ class ConvVAE(nn.Module):
         return mu + sigma * normal, mu, logvar
 
     def decode(self, z):
-        h1 = F.relu(self.deconv1(z))
+        l1 = self.fc3(z)
+        l1 = l1.unsqueeze(0).unsqueeze(0).unsqueeze(0).permute(0,3,1,2)
+        h1 = F.relu(self.deconv1(l1))
         h2 = F.relu(self.deconv2(h1))
         h3 = F.relu(self.deconv3(h2))
-        return F.sigmoid(self.deconv4(h3))
+        return torch.sigmoid(self.deconv4(h3))
 
     def forward(self, x):
         z, mu, logvar = self.encode(x)
