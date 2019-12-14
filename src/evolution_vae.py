@@ -30,11 +30,11 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 24
-NUMBER_ROLLS = 4
-GENERATION_LIMIT = 8
-SCORE_LIMIT = 100
-MAX_STEPS = 200 #each run should actually has 1000 steps, but this can give us time
+POPULATION_SIZE = 48
+NUMBER_ROLLS = 8
+GENERATION_LIMIT = 32
+SCORE_LIMIT = 200
+MAX_STEPS = 300 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
@@ -81,7 +81,7 @@ env = gym.make('CarRacing-v0')
 #env.reset() #adding these two to test behaviour of background visualization
 #env.render() #could it speed up?
 
-solver = cma.CMAEvolutionStrategy(99* [0.5], 0.2, {'popsize': POPULATION_SIZE,}) #876 total parameters (#99 in VAE model)
+solver = cma.CMAEvolutionStrategy(99 * [0], 0.6, {'popsize': POPULATION_SIZE,}) #876 total parameters (#99 in VAE model)
 best_par_score = [] #list with best parameters and scores each round (solver format)
 best_par_score2 = [] #(my format)
 generation = 0
@@ -108,7 +108,7 @@ while True:
         #simulate agent in environment
         total_roll = 0
         for j in range(0, NUMBER_ROLLS):  #This could be parallelised (each instance runs its own)
-            print('rollout: ', j)
+            print('G: ', i, 'rollout: ', j)
             total_roll += rollout(k, env) #returns cumulative score each run
         
         average_roll = total_roll/(NUMBER_ROLLS)
@@ -155,7 +155,7 @@ with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
 #env.render() #would this allow log to plot?
 #env.close() 
 
-print('end')   
+print('end')
 solver.result_pretty()
 solver.logger.plot()
 #scma.plot()
