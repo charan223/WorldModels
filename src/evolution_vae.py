@@ -6,33 +6,42 @@ import torch
 import cv2
 #import json
 import pickle
-import matplotlib
+import matplotlib #not necessary, but how do I get logger to plot
 
 import sys
+#Change this path to your computer
 sys.path.insert(1, '/users/alberto/projects/WorldModels/models')
 import convVAE
 
 #This works with just VAE
-#to run (from outside src for paths to work)
-#python3 src/evolution_vae.py
+#python3 evolution_vae.py
 
 ##PENDING
 #Size parameters W and bias (0 to 1)?
 
-#Using this, as recommended by paper
-#http://blog.otoro.net/2017/11/12/evolving-stable-strategies/
+#To DO
+#better saving format for data
+#FIX PLOTS
 
 #issue: solver.looger.plot() is not plotting
 
+#Using this, as recommended by paper
+#http://blog.otoro.net/2017/11/12/evolving-stable-strategies/
+
+
 #Parameters experiment:
 POPULATION_SIZE = 24
-NUMBER_ROLLS = 5
-GENERATION_LIMIT = 32
+NUMBER_ROLLS = 4
+GENERATION_LIMIT = 8
 SCORE_LIMIT = 100
 MAX_STEPS = 200 #each run should actually has 1000 steps, but this can give us time
 
 
+device = torch.device("cpu")
+#data_folder = "../data/carracing/"
+vae_file = "../checkpoints/final.pth"
 vae = convVAE.ConvVAE()
+vae.load_state_dict(torch.load(vae_file, map_location=device))
 
 def rollout(k, env):
     # k is a controller instance
@@ -98,9 +107,8 @@ while True:
     
         #simulate agent in environment
         total_roll = 0
-        for j in range(0, NUMBER_ROLLS): #Hardcoded, 17 rollouts #This could be parallelised
+        for j in range(0, NUMBER_ROLLS):  #This could be parallelised (each instance runs its own)
             print('rollout: ', j)
-            #This will not run, outputs will not match
             total_roll += rollout(k, env) #returns cumulative score each run
         
         average_roll = total_roll/(NUMBER_ROLLS)
@@ -139,7 +147,7 @@ final_solutions = best, best2 #not sure if this assignment is allowed
 ##f = open('evo_results.json')
 ##final_solutions = json.load(f)
 
-with open('evo_results.pkl', 'wb') as f: #save in current folder
+with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
     pickle.dump(final_solutions, f)
 #with open('evo_results.pkl', ‘rb’) as f:
 #    stored_data = pickle.load(f)
