@@ -74,14 +74,13 @@ class Controller_VAE:
     
     def __init__(self):
         self.visual = np.zeros((32,)) #for now I am fising sizes #would ones be more useful?
-        self.padding = np.zeros((1,))
         
-        self.weights = np.zeros((3,11))
+        self.weights = np.zeros((3,32))
         self.bias = np.zeros((3,))
 
     def randomize_parameters(self):
         #randomize weights and bias (between 0 and 1)
-        self.weights = np.random.rand(3,11)
+        self.weights = np.random.rand(3,32)
         self.bias = np.random.rand(3,)
         
     def randomize_input(self):
@@ -100,17 +99,16 @@ class Controller_VAE:
     def action (self):
         #apply function to keep within boundaries?
         #paer says tnah nonlinearities (does not expecify much)
-        print(self.visual)
-        print(self.padding)
-        conc = np.concatenate((self.visual, self.padding))
-        action_vector = np.dot(self.weights, conc ) + self.bias
+        #conc = np.concatenate((self.visual, self.padding))
+        
+        action_vector = np.dot(self.weights, self.visual) + self.bias
         
         #action[0] = clip(action[0], 1, -1)
         action_vector[0] = np.tanh(action_vector[0])
         #action[1] = clip(action[1], 1, 0)
-        action_vector[1] = (np.tanh(action[1]) + 1) / 2
+        action_vector[1] = (np.tanh(action_vector[1]) + 1) / 2
         #action[2] = clip(action[2], 2, 0)
-        action_vector[2] = (np.tanh(action[2]) + 1) / 2
+        action_vector[2] = (np.tanh(action_vector[2]) + 1) / 2
         
         return action_vector
     
@@ -122,8 +120,8 @@ class Controller_VAE:
     def return_parameters(self):
         return self.weights, self.bias
         
-
-k = Controller()
+'''
+a = Controller()
 k.randomize_parameters()
 k.randomize_input()
 
@@ -137,3 +135,4 @@ s = k.return_parameters()
 #print(s)
     
 #Controller_Simple.action()
+'''
