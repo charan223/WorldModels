@@ -30,11 +30,11 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 48
-NUMBER_ROLLS = 8
-GENERATION_LIMIT = 32
+POPULATION_SIZE = 12
+NUMBER_ROLLS = 4
+GENERATION_LIMIT = 20
 SCORE_LIMIT = 200
-MAX_STEPS = 300 #each run should actually has 1000 steps, but this can give us time
+MAX_STEPS = 400 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
@@ -49,7 +49,7 @@ def rollout(k, env):
     
     obs = env.reset()
     #Is there another way to run the experiment without initialising
-    #env.render() #for visualization, does not work well on my laptop
+    env.render() #for visualization, does not work well on my laptop
     
     #I am considering putting our own counter to easily change the length of rollouts (reduce them)
     #I counted 1000 steps, I reduced it to 100
@@ -73,15 +73,15 @@ def rollout(k, env):
         a = k.action()
         obs, reward, done, other = env.step(a)
         total_reward += reward
-        
+        if done == True: break #print early break
     return total_reward
 
 
 env = gym.make('CarRacing-v0')
-#env.reset() #adding these two to test behaviour of background visualization
-#env.render() #could it speed up?
+env.reset() #adding these two to test behaviour of background visualization
+env.render() #could it speed up?
 
-solver = cma.CMAEvolutionStrategy(99 * [0], 0.6, {'popsize': POPULATION_SIZE,}) #876 total parameters (#99 in VAE model)
+solver = cma.CMAEvolutionStrategy(99 * [0], 0.1, {'popsize': POPULATION_SIZE,}) #876 total parameters (#99 in VAE model)
 best_par_score = [] #list with best parameters and scores each round (solver format)
 best_par_score2 = [] #(my format)
 generation = 0
@@ -108,10 +108,10 @@ while True:
         #simulate agent in environment
         total_roll = 0
         for j in range(0, NUMBER_ROLLS):  #This could be parallelised (each instance runs its own)
-            print('G: ', i, 'rollout: ', j)
+            print('    G: ', generation, 'rollout: ', j) #indent inwards?
             total_roll += rollout(k, env) #returns cumulative score each run
         
-        average_roll = total_roll/(NUMBER_ROLLS)
+        average_roll = -total_roll/(NUMBER_ROLLS)
         #fitness_list[i] = average_roll
         fitness_list.append(average_roll) #They should be appended in right order
 
@@ -127,9 +127,9 @@ while True:
     best = solver.result
     
     #my own save
-    max_value = max(fitness_list)
-    max_index = fitness_list.index(max_value)
-    best2 = max_value, solutions[max_index]
+    min_value = min(fitness_list)
+    min_index = fitness_list.index(min_value)
+    best2 = min_value, solutions[min_index]
     
     best_par_score.append(best)
     best_par_score2.append(best2)
