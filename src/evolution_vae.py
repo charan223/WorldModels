@@ -30,11 +30,11 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 12
-NUMBER_ROLLS = 4
-GENERATION_LIMIT = 30
-SCORE_LIMIT = 400
-MAX_STEPS = 400 #each run should actually has 1000 steps, but this can give us time
+POPULATION_SIZE = 24 #paper 64
+NUMBER_ROLLS = 6 #paper 16
+GENERATION_LIMIT = 30 #Limit to number generations used (paper says 1800 needed)
+SCORE_LIMIT = 200 #score we want it to reach before ending (900 is what we should aim for)
+MAX_STEPS = 600 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
