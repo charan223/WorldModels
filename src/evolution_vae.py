@@ -32,8 +32,8 @@ import convVAE
 #Parameters experiment:
 POPULATION_SIZE = 12
 NUMBER_ROLLS = 4
-GENERATION_LIMIT = 20
-SCORE_LIMIT = 200
+GENERATION_LIMIT = 30
+SCORE_LIMIT = 400
 MAX_STEPS = 400 #each run should actually has 1000 steps, but this can give us time
 
 
@@ -133,9 +133,9 @@ while True:
     
     best_par_score.append(best)
     best_par_score2.append(best2)
-    print('Best obtained: ', max_value)
+    print('Best obtained: ', min_value)
 
-    if generation == GENERATION_LIMIT or max_value > SCORE_LIMIT:
+    if generation == GENERATION_LIMIT or -min_value > SCORE_LIMIT:
         #exit while loop
         #put condition appropiate
         break
