@@ -107,6 +107,7 @@ logger_res = cma.CMADataLogger().register(solver) #Store and plot outside
 
 best_par_score = [] #list with best parameters and scores each round (solver format)
 best_par_score2 = [] #(my format)
+score_point_gen = []
 generation = 0
 
 while True:
@@ -157,7 +158,8 @@ while True:
     best2 = min_value, solutions[min_index]
     
     max_avg_min = score_aggregator(fitness_list)
-    save_current_state(solver, logger_res, solutions, fitness_list, max_avg_min, generation)
+    score_point_gen.append(max_avg_min)
+    save_current_state(solver, logger_res, solutions, fitness_list, score_point_gen, generation)
     
     best_par_score.append(best)
     best_par_score2.append(best2)
