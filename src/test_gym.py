@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 from utils.train_utils import load_model
 import sys
 
+import cv2
+
 import controller
 
 #not sure how to use this functionality: #not that it is needed
@@ -25,8 +27,8 @@ import controller
 #box2d.AntEnv
 
 
-LATENT_SIZE = 256
-HIDDEN_SIZE = 32
+LATENT_SIZE = 32
+HIDDEN_SIZE = 256
 ACTION_SIZE = 3
 ONLY_VAE = True
 
@@ -47,6 +49,36 @@ class Controller(nn.Module):
         th1[1] = (th1[1] + 1)/2
         th1[2] = (th1[2] + 1)/2
         return th1
+        
+        
+def unflatten_parameters(params, example, device):
+    """ Unflatten parameters.
+    :args params: parameters as a single 1D np array
+    :args example: generator of parameters (as returned by module.parameters()),
+        used to reshape params
+    :args device: where to store unflattened parameters
+    :returns: unflattened parameters
+    """
+    params = torch.Tensor(params).to(device)
+    idx = 0
+    unflattened = []
+    for e_p in example:
+        unflattened += [params[idx:idx + e_p.numel()].view(e_p.size())]
+        idx += e_p.numel()
+    return unflattened
+    
+
+def load_parameters(params, controller):
+    """ Load flattened parameters into controller.
+    :args params: parameters as a single 1D np array
+    :args controller: module in which params is loaded
+    """
+    proto = next(controller.parameters())
+    params = unflatten_parameters(
+        params, controller.parameters(), proto.device)
+
+    for p, p_0 in zip(controller.parameters(), params):
+        p.data.copy_(p_0)
 
 
 with open('evo_vae_28_pop_size_800_length_4_avg_rollout.pkl', 'rb') as f:
@@ -56,15 +88,18 @@ solver_state = info_loaded[0]
 best_param = solver_state.result[0]
 
 
+
+
 controller_test = Controller(LATENT_SIZE, HIDDEN_SIZE, ACTION_SIZE, ONLY_VAE)
-controller_test.load_state_dict(controllers[0].state_dict())
+#controller_test.load_state_dict(controllers[0].state_dict())
+
+load_parameters(best_param, controller_test)
 
 
 device = torch.device("cpu")
-vae_file = checkpoints/random/model_7.pth
+vae_file = 'checkpoints/random/model_7.pth'
 vae = ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
-
 
 if not ONLY_VAE:
     lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
@@ -74,13 +109,18 @@ if not ONLY_VAE:
 
 #env = gym.make('MountainCar-v0')
 env = gym.make('CarRacing-v0')
-env.reset()
+obs = env.reset()
+
 
 counter = 0
 
 #s = controller.Controller #Will not work because I do not have inputs.
 #s.action_rand()
 #s.action(z,h)
+
+#just intialising
+reward = 0
+done = False
 
 for _ in range(1000):
     
@@ -98,7 +138,7 @@ for _ in range(1000):
     else:
         a = controller_test(z_vector)
     
-    obs, reward, done, _ = envir.step(a.detach().numpy())
+    obs, reward, done, _ = env.step(a.detach().numpy())
     
     
     #t = controller.Controller_Simple.action() #(not initialising this class..)
