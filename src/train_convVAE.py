@@ -36,24 +36,40 @@ parser.add_argument('--batch_rollout_size', type=int, default=100, metavar='N',
                     help='number of rollouts to be considered for each batch')
 parser.add_argument('--model_file', type=str, default='final.pth', metavar='N',
                     help='final model for evaluation')
-
+parser.add_argument('--model_path', type=str, default='checkpoints', metavar='N',
+                    help='checkpoints paths')
+parser.add_argument('--log_file', type=str, default='vae_train.log', metavar='N',
+                    help='final model for evaluation')
+parser.add_argument('--log_path', type=str, default='logs', metavar='N',
+                    help='checkpoints paths')
+parser.add_argument('--action_type', type=str, default='random', metavar='N',
+                    help='random or continuous')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
+logging.basicConfig(filename=join(args.log_path, args.action_type, args.log_file), level=logging.INFO)
+logger = logging.getLogger('vae_train')
+
 torch.manual_seed(args.seed)
+# Fix numeric divergence due to bug in Cudnn (from ctallec repo)
+#torch.backends.cudnn.benchmark = True
+
+#for random flipping, shuffling
+np.random.seed(100)
+
 
 device = torch.device("cuda" if args.cuda else "cpu")
 
-logging.basicConfig(filename='results/vae_train.log', level=logging.INFO)
-logger = logging.getLogger('vae_train')
-
 model = ConvVAE(N_z=args.N_z,
-              batch_size=args.batch_size,
-              is_training=True,
-              reuse=False,
-              gpu_mode=True).to(device)
+              batch_size=args.batch_size).to(device)
 
+#Added scheduler to control learning rate(from ctallec repo)
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
+def save_checkpoint(state, is_best, filename, best_filename):
+    torch.save(state, filename)
+    if is_best:
+        torch.save(state, best_filename)
 
 # L2 Loss + KL Loss as suggested in paper and are summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
@@ -68,16 +84,17 @@ def loss_function(recon_x, x, mu, logvar):
 
     return L2_Loss + KL_Loss
 
+def train(epoch, data_folder, train_loss_arr):
 
-def train(epoch, data_folder, model_file):
-    model_path = "checkpoints"
+    assert join(args.model_path, args.action_type)
 
-    if not exists(model_path):
-        os.makedirs(model_path)
-
-    if exists(join(model_path, model_file)):
+    filename = join(args.model_path, args.action_type, args.model_file)
+    if exists(filename):
         #TO DO: LOAD MODEL HERE and train code for left over rollouts
-        model.load_state_dict(torch.load(join(model_path, model_file)))
+        #model.load_state_dict(torch.load(join(model_path, model_file)))
+        state = torch.load(filename)
+        model.load_state_dict(state['state_dict'])
+        optimizer.load_state_dict(state['optimizer'])
 
     model.train()
     train_loss = 0
@@ -96,20 +113,25 @@ def train(epoch, data_folder, model_file):
 
     # num_batches = 1000 * 100/1
     num_batches = int(ep_length * batch_rollout_size/args.batch_size)
-
+    
     for batch_rollout in range(num_rollout_batches):
             # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
             obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
+
             # perform shuffling only in train
             np.random.shuffle(obs)
             for batch_idx in range(num_batches):
                 batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
+                #add random flipping
+                flip = np.random.choice([0,1], 1, p=[0.5,0.5])[0]                
+                batch = [batch, np.flip(batch, axis = 2)][flip]
+
                 # as the input pixels lie between 0, 1
                 batch_obs = batch.astype(np.float)/255.0
 
                 batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
-
+                batch_obs = (batch_obs).to(device) 
                 # for gradients to not accumulate
                 optimizer.zero_grad()
 
@@ -133,18 +155,31 @@ def train(epoch, data_folder, model_file):
                         loss.item() / len(batch)))
             
             # TO DO SAVE MODEL HERE
-            torch.save(model.state_dict(), join(model_path, model_file))
+            #torch.save(model.state_dict(), join(model_path, model_file))
+            save_checkpoint({
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'precision': test_loss,
+                'optimizer': optimizer.state_dict()
+            }, False, filename, None)
+
+    train_loss = train_loss / (train_rollouts * len(obs))
 
     logger.info('====> Epoch: {} Average loss: {:.4f}'.format(
-            epoch, train_loss / (train_rollouts * len(obs)) ))
+            epoch, train_loss ))
+    train_loss_arr.append(train_loss)
+    return train_loss_arr
 
-def test(epoch, data_folder, model_file):
+def test(epoch, data_folder, test_loss_arr):
 
-    model_path = "checkpoints"
+    assert join(args.model_path, args.action_type)
 
-    assert exists(join(model_path, model_file))
-
-    model.load_state_dict(torch.load(join(model_path, model_file)))
+    filename = join(args.model_path, args.action_type, args.model_file)
+    if exists(filename):
+        #TO DO: LOAD MODEL HERE and train code for left over rollouts
+        #model.load_state_dict(torch.load(join(model_path, model_file)))
+        state = torch.load(filename)
+        model.load_state_dict(state['state_dict'])
 
     model.eval()
     test_loss = 0
@@ -180,24 +215,47 @@ def test(epoch, data_folder, model_file):
                     batch_obs = batch.astype(np.float)/255.0
 
                     batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
-
+                    batch_obs = (batch_obs).to(device)
                     batch_recon_obs, mu, logvar = model(batch_obs)
 
                     test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
-                    '''
-                    if batch_idx < 3:
-                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
-                        cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)
-                    '''
+                    
+                    #if batch_idx < 3:
+                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
+                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)             
 
         test_loss = test_loss / (test_rollouts * ep_length)
         logger.info('====> Test set loss: {:.4f}'.format(test_loss))
+        test_loss_arr.append(test_loss)
+        return test_loss_arr
 
-if __name__ == "__main__":
 
-    data_folder = "data/carracing/"
-    assert exists(data_folder)
 
-    for epoch in range(1, args.epochs + 1):
-        train(epoch, data_folder, args.model_file)
-        test(epoch, data_folder, args.model_file)
+data_folder = join("data/carracing" , args.action_type)
+assert exists(data_folder)
+train_loss_arr, test_loss_arr = [], []
+cur_best = None
+for epoch in range(1, args.epochs + 1):
+        train_loss_arr = train(epoch, data_folder, train_loss_arr)
+        test_loss_arr = test(epoch, data_folder, test_loss_arr)
+        test_loss = test_loss_arr[len(test_loss_arr)-1]
+        
+        # checkpointing
+        best_filename = join(args.model_path, args.action_type, 'best.pth')
+        filename = join(args.model_path, args.action_type, 'checkpoint_' + str(epoch) + '.pth')
+        
+        is_best = not cur_best or test_loss < cur_best
+        if is_best:
+            cur_best = test_loss
+
+        save_checkpoint({
+            'epoch': epoch,
+            'state_dict': model.state_dict(),
+            'precision': test_loss,
+            'optimizer': optimizer.state_dict()
+        }, is_best, filename, best_filename)
+
+logger.info("Overall training loss is")
+logger.info(train_loss_arr)
+logger.info("Overall testing loss is")
+logger.info(test_loss_arr)

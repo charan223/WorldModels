@@ -9,14 +9,11 @@ from torchvision.utils import save_image
 class ConvVAE(nn.Module):
     #Input to ConvVAE is resized to 64 * 64 * 3, each pixel has 3 float values
     # between 0, 1 to represent each of RGB channels
-    def __init__(self, N_z=32, batch_size=1, 
-            is_training=False, reuse=False, gpu_mode=False):
+    def __init__(self, N_z=32, batch_size=1):
         super(ConvVAE, self).__init__()
 
         self.N_z = N_z
         self.batch_size = batch_size
-        self.is_training = is_training
-        self.reuse = reuse
 
         self.conv1 = nn.Conv2d(3, 32, 4, stride = 2)
         self.conv2 = nn.Conv2d(32, 64, 4, stride = 2)
@@ -38,9 +35,9 @@ class ConvVAE(nn.Module):
         h2 = F.relu(self.conv2(h1))
         h3 = F.relu(self.conv3(h2))
         h4 = F.relu(self.conv4(h3))
-        l1 = h4.reshape(-1)
-        mu = self.fc1(l1)
-        logvar = self.fc2(l1)
+        h4 = h4.reshape(-1)
+        mu = self.fc1(h4)
+        logvar = self.fc2(h4)
 
         # we take log of var as sigma cannot be negative while neural network can output negative values
         sigma = torch.exp(logvar * 0.5)
