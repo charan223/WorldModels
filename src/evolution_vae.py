@@ -11,7 +11,7 @@ import matplotlib #not necessary, but how do I get logger to plot
 import sys
 #Change this path to your computer
 sys.path.insert(1, '/users/alberto/projects/WorldModels/models')
-import convVAE
+import models.convVAE as convVAE
 
 #This works with just VAE
 #python3 evolution_vae.py
@@ -30,16 +30,16 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 4 #paper 64
-NUMBER_ROLLS = 2 #paper 16
-GENERATION_LIMIT = 3 #Limit to number generations used (paper says 1800 needed)
-SCORE_LIMIT = 200 #score we want it to reach before ending (900 is what we should aim for)
-MAX_STEPS = 150 #each run should actually has 1000 steps, but this can give us time
+POPULATION_SIZE = 32 #paper 64
+NUMBER_ROLLS = 8 #paper 16
+GENERATION_LIMIT = 50 #Limit to number generations used (paper says 1800 needed)
+SCORE_LIMIT = 900 #score we want it to reach before ending (900 is what we should aim for)
+MAX_STEPS = 600 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
 #data_folder = "../data/carracing/"
-vae_file = "../checkpoints/final.pth"
+vae_file = "../checkpoints/random/model_7.pth"
 vae = convVAE.ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
 

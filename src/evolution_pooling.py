@@ -15,20 +15,19 @@ import multiprocessing
 import matplotlib.pyplot as plt
 
 import sys
-sys.stdout = open('evo_logs', 'w')
 
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
-parser.add_argument('--pop_size', type=int, default=64, metavar='N',
+parser.add_argument('--pop_size', type=int, default=8, metavar='N',
                     help='population size')
-parser.add_argument('--num_rolls', type=int, default=16, metavar='N',
+parser.add_argument('--num_rolls', type=int, default=2, metavar='N',
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=1800, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=50, metavar='N',
                     help='generation limit')
 parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
+parser.add_argument('--max_steps', type=int, default=600, metavar='N',
                     help='score limit')
 parser.add_argument('--processes', type=int, default=4, metavar='N',
                     help='number of parallel processes')
@@ -48,7 +47,7 @@ parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
                     help='hidden size')
 parser.add_argument('--action_size', type=int, default=3, metavar='N',
                     help='action size')
-parser.add_argument('--pooling', action='store_true', default=False, metavar='N',
+parser.add_argument('--pooling', action='store_true', default=True,
                     help='true or false')
 
 args = parser.parse_args()
@@ -89,7 +88,9 @@ vae_file = join(args.vae_model_path, args.action_type, args.vae_model_file)
 vae = ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
 
-controller = Controller(args.latent_size, args.hidden_size, args.action_size, args.only_vae)
+controllers = [Controller(args.latent_size, args.hidden_size, args.action_size, args.only_vae) for i in range(args.pop_size)]
+for controller in controllers:
+    controller.load_state_dict(controllers[0].state_dict())
 
 def unflatten_parameters(params, example, device):
     """ Unflatten parameters.
@@ -107,7 +108,7 @@ def unflatten_parameters(params, example, device):
         idx += e_p.numel()
     return unflattened
 
-def load_parameters(params):
+def load_parameters(params, controller):
     """ Load flattened parameters into controller.
     :args params: parameters as a single 1D np array
     :args controller: module in which params is loaded
@@ -129,18 +130,18 @@ def score_aggregator(fitness_list):
     
 def save_current_state(solver, logger, solutions, fitness_list, list_points, generation):
     file_to_store = (solver, logger, (solutions, fitness_list, list_points, generation))
-    with open('evo_vae_{0}_pop_size_{1}_length_{2}_avg_rollout.pkl'.format(POPULATION_SIZE, MAX_STEPS, NUMBER_ROLLS), 'wb') as f:
+    with open('evo_vae_{0}_pop_size_{1}_length_{2}_avg_rollout.pkl'.format(args.pop_size, args.max_steps, args.num_rolls), 'wb') as f:
         pickle.dump(file_to_store, f)
 
 
-env = gym.make('CarRacing-v0')
-env.reset() #adding these two to test behaviour of background visualization
+#env = gym.make('CarRacing-v0')
+#x = env.reset() #adding these two to test behaviour of background visualization
 
 #screen = env.render(mode='rgb_array') #could it speed up?
 #plt.imshow(screen)
 #plt.show()
 
-parameters = controller.parameters()
+parameters = controllers[0].parameters()
 
 solver = cma.CMAEvolutionStrategy(torch.cat([p.detach().view(-1) for p in parameters], dim=0).cpu().numpy(),
         0.1, {'popsize': args.pop_size}) #876 total parameters (#99 in VAE model)
@@ -154,7 +155,7 @@ generation = 0
 
 
 
-def rollout(params):
+def rollout(params, controller, env):
     # k is a controller instance
     # env is the car racing environment
     
@@ -192,13 +193,14 @@ def rollout(params):
 def multi_run_wrapper(args):
    return rollout_pooling(*args)
 
-def rollout_pooling(s_id, params):
+def rollout_pooling(s_id, params, controller):
     total_roll = 0
     for i in range(args.num_rolls):
         # k is a controller instance
         # env is the car racing environment
-        
-        obs = env.reset()
+
+        envir = gym.make('CarRacing-v0')
+        obs = envir.reset()
         #Is there another way to run the experiment without initialising
         #env.render() #for visualization, does not work well on my laptop
         #screen = env.render(mode='rgb_array') #could it speed up?
@@ -213,7 +215,7 @@ def rollout_pooling(s_id, params):
         
         #load params into controller
         if params is not None:
-            load_parameters(params)
+            load_parameters(params, controller)
 
         #while not done:
         while step_counter < args.max_steps:
@@ -223,97 +225,101 @@ def rollout_pooling(s_id, params):
             z, _, _ = vae.encode(batch)#Take first argument
             z_vector = z.detach()
             a = controller(z_vector)
-            obs, reward, done, _ = env.step(a.detach().numpy())
+            obs, reward, done, _ = envir.step(a.detach().numpy())
             total_reward += reward
             if done == True: break #print early break
         total_roll += total_reward
     average_roll = -total_roll/(args.num_rolls)
-    print("Average roll in id {%d} is {%0.4f}".format(s_id, average_roll))
+    print("Average roll in id {} is {}".format(s_id, average_roll))
     return s_id, average_roll
 
-pool = multiprocessing.Pool(processes=args.processes)
+if __name__ == '__main__':
+
+    multiprocessing.set_start_method('spawn')
+
+    sys.stdout = open('evo_logs', 'w')
 
 
+    while True:
+        generation += 1
+        print('Generation: ', generation)
+        sys.stdout.flush()
+        solutions = solver.ask()
 
-while True:
-    generation += 1
-    print('Generation: ', generation)
-    sys.stdout.flush()
-    solutions = solver.ask()
+        pool = multiprocessing.Pool(processes=args.processes)
+        if args.pooling:
+            fitness_list = np.zeros(len(solutions))
+            pool_inputs = []
+            for s_id, params in enumerate(solutions):
+                pool_inputs.append((s_id, params, controllers[s_id]))
+            pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
+            pool.close()
+            pool.join()
 
-    if args.pooling:
-        fitness_list = np.zeros(len(solutions))
-
-        pool_inputs = []
-        for s_id, params in enumerate(solutions):
-            pool_inputs.append((s_id, params))
-        pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
-        pool.close()
-        pool.join()
-
-        for s_id, average_roll in pool_outputs:
-            fitness_list[s_id] = average_roll
-    else:
-        fitness_list = []
-        for i in range(0, len(solutions)): 
-        #loop for each of the solutions provided , which is
-        #determined by popsize in solver
-            print('solution (instance): ', i)
-            sys.stdout.flush()
-            #simulate agent in environment
-            total_roll = 0
-            for j in range(0, args.num_rolls):  #This could be parallelised (each instance runs its own)
-                print('    G: ', generation, 'rollout: ', j) #indent inwards?
+            for s_id, average_roll in pool_outputs:
+                fitness_list[s_id] = average_roll
+        else:
+            fitness_list = []
+            for i in range(0, len(solutions)):
+            #loop for each of the solutions provided , which is
+            #determined by popsize in solver
+                print('solution (instance): ', i)
                 sys.stdout.flush()
-                total_roll += rollout(solutions[i]) #returns cumulative score each run
+                #simulate agent in environment
+                total_roll = 0
+                for j in range(0, args.num_rolls):  #This could be parallelised (each instance runs its own)
+                    print('    G: ', generation, 'rollout: ', j) #indent inwards?
+                    sys.stdout.flush()
+                    total_roll += rollout(solutions[i]) #returns cumulative score each run
             
-            average_roll = -total_roll/(args.num_rolls)
-            #fitness_list[i] = average_roll
-            fitness_list.append(average_roll) #They should be appended in right order
+                average_roll = -total_roll/(args.num_rolls)
+                #fitness_list[i] = average_roll
+                fitness_list.append(average_roll) #They should be appended in right order
 
-            #add function here to monitor every so often state of evo algoirthm
-            print('score: ', average_roll) 
-            sys.stdout.flush()
+                #add function here to monitor every so often state of evo algoirthm
+                print('score: ', average_roll)
+                sys.stdout.flush()
 
-    solver.tell(solutions, fitness_list)
-    solver.logger.add()
-    solver.disp()
+        solver.tell(solutions, fitness_list)
+        solver.logger.add()
+        solver.disp()
     
-    max_avg_min = score_aggregator(fitness_list)
-    score_point_gen.append(max_avg_min)
-    save_current_state(solver, logger_res, solutions, fitness_list, score_point_gen, generation)
+        max_avg_min = score_aggregator(fitness_list)
+        score_point_gen.append(max_avg_min)
+        save_current_state(solver, logger_res, solutions, fitness_list, score_point_gen, generation)
     
-    #Solver know
-    #bestsol, bestfit = solver.result()
-    best = solver.result
+        #Solver know
+        #bestsol, bestfit = solver.result()
+        best = solver.result
     
-    #my own save
-    min_index, min_value = np.argmin(fitness_list), np.min(fitness_list)
-    best2 = min_value, solutions[min_index]
+        #my own save
+        min_index, min_value = np.argmin(fitness_list), np.min(fitness_list)
+        best2 = min_value, solutions[min_index]
     
-    best_par_score.append(best)
-    best_par_score2.append(best2)
-    print('Best obtained: ', min_value)
+        best_par_score.append(best)
+        best_par_score2.append(best2)
+        print('Best obtained: ', min_value)
+        sys.stdout.flush()
+        if generation == args.gen_limit or -min_value > args.score_limit:
+            #exit while loop
+            #put condition appropiate
+            break
+
+    final_solutions = best, best2 #not sure if this assignment is allowed
+
+    #with open('evo_results.json', 'w') as f: #Seems not to be working
+    #    json.dump(final_solutions, f)
+    ##f = open('evo_results.json')
+    ##final_solutions = json.load(f)
+
+    with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
+        pickle.dump(final_solutions, f)
+
+
+    print('end')
+
     sys.stdout.flush()
-    if generation == args.gen_limit or -min_value > args.score_limit:
-        #exit while loop
-        #put condition appropiate
-        break
-
-final_solutions = best, best2 #not sure if this assignment is allowed
-
-#with open('evo_results.json', 'w') as f: #Seems not to be working
-#    json.dump(final_solutions, f)
-##f = open('evo_results.json')
-##final_solutions = json.load(f)
-
-with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
-    pickle.dump(final_solutions, f)
-
-
-print('end')
-sys.stdout.flush()
-solver.result_pretty()
-solver.logger.plot()
-#scma.plot()
-#solver.plot()
+    solver.result_pretty()
+    solver.logger.plot()
+    #scma.plot()
+    #solver.plot()
