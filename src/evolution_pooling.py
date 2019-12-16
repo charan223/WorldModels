@@ -119,7 +119,18 @@ def load_parameters(params):
     for p, p_0 in zip(controller.parameters(), params):
         p.data.copy_(p_0)
 
-
+def score_aggregator(fitness_list):
+    average_value = sum(fitness_list)/len(fitness_list)
+    best_value = min(fitness_list)
+    worst_value = max(fitness_list)
+    #score_agg.extend([])
+    score_agg =[best_value, average_value, worst_value]
+    return score_agg
+    
+def save_current_state(solver, logger, solutions, fitness_list, list_points, generation):
+    file_to_store = (solver, logger, (solutions, fitness_list, list_points, generation))
+    with open('evo_vae_{0}_pop_size_{1}_length_{2}_avg_rollout.pkl'.format(POPULATION_SIZE, MAX_STEPS, NUMBER_ROLLS), 'wb') as f:
+        pickle.dump(file_to_store, f)
 
 
 env = gym.make('CarRacing-v0')
@@ -133,6 +144,9 @@ parameters = controller.parameters()
 
 solver = cma.CMAEvolutionStrategy(torch.cat([p.detach().view(-1) for p in parameters], dim=0).cpu().numpy(),
         0.1, {'popsize': args.pop_size}) #876 total parameters (#99 in VAE model)
+        
+logger_res = cma.CMADataLogger().register(solver) 
+score_point_gen = []
 
 best_par_score = [] #list with best parameters and scores each round (solver format)
 best_par_score2 = [] #(my format)
@@ -264,6 +278,10 @@ while True:
     solver.tell(solutions, fitness_list)
     solver.logger.add()
     solver.disp()
+    
+    max_avg_min = score_aggregator(fitness_list)
+    score_point_gen.append(max_avg_min)
+    save_current_state(solver, logger_res, solutions, fitness_list, score_point_gen, generation)
     
     #Solver know
     #bestsol, bestfit = solver.result()
