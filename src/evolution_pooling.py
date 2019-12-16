@@ -20,23 +20,18 @@ import sys
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
-<<<<<<< HEAD
-parser.add_argument('--pop_size', type=int, default=64, metavar='N',
-                    help='population size')
-parser.add_argument('--num_rolls', type=int, default=16, metavar='N',
-=======
+
 parser.add_argument('--pop_size', type=int, default=32, metavar='N',
                     help='population size')
 parser.add_argument('--num_rolls', type=int, default=8, metavar='N',
->>>>>>> f99462cfd6cd115e0f2b3a0909e59f3a55abbb40
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=1800, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=100, metavar='N',
                     help='generation limit')
 parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
+parser.add_argument('--max_steps', type=int, default=600, metavar='N',
                     help='max steps')
-parser.add_argument('--processes', type=int, default=6, metavar='N',
+parser.add_argument('--processes', type=int, default=4, metavar='N',
                     help='number of parallel processes')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -231,7 +226,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
         if params is not None:
             load_parameters(params, controller)
 
-        a = np.zeros(3,)
+        a = torch.zeros(3,)
         #while not done:
         while step_counter < args.max_steps:
             step_counter += 1
@@ -240,7 +235,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
             z, _, _ = vae.encode(batch)#Take first argument
             z_vector = z.detach()
             if not args.only_vae:
-                lstm_input = torch.cat((z, torch.tensor(a, dtype=torch.float)))
+                lstm_input = torch.cat((z, a.clone().detach()))
                 _ = lstm_mdn(lstm_input.view(1, 1, 35))
                 _, hidden = lstm_mdn.hidden
                 a = controller(z_vector, torch.squeeze(hidden[0]))
