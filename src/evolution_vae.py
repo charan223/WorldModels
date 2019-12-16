@@ -185,7 +185,7 @@ final_solutions = best, best2 #not sure if this assignment is allowed
 ##f = open('evo_results.json')
 ##final_solutions = json.load(f)
 
-with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
+with open('evo_vae_only_results.pkl', 'wb') as f: #save in current folder
     pickle.dump(final_solutions, f)
 #with open('evo_results.pkl', 'rb') as f:
 #    stored_data = pickle.load(f)

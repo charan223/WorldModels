@@ -238,7 +238,7 @@ if __name__ == '__main__':
 
     multiprocessing.set_start_method('spawn')
 
-    sys.stdout = open('evo_logs', 'w')
+    sys.stdout = open('evo_logs_vae_only', 'w')
 
 
     while True:
@@ -313,7 +313,7 @@ if __name__ == '__main__':
     ##f = open('evo_results.json')
     ##final_solutions = json.load(f)
 
-    with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
+    with open('evo_vae_only_results.pkl', 'wb') as f: #save in current folder
         pickle.dump(final_solutions, f)
 
 
