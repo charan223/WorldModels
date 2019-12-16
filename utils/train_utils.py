@@ -14,4 +14,3 @@ def save_model(dir_path, model, model_type, n_iter, time, state):
 
 def load_model(filepath, model):
     model.load_state_dict(torch.load(filepath)['model'])
-
