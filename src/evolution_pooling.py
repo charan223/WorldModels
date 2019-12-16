@@ -19,9 +19,9 @@ import sys
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
-parser.add_argument('--pop_size', type=int, default=8, metavar='N',
+parser.add_argument('--pop_size', type=int, default=32, metavar='N',
                     help='population size')
-parser.add_argument('--num_rolls', type=int, default=2, metavar='N',
+parser.add_argument('--num_rolls', type=int, default=8, metavar='N',
                     help='number of rolls')
 parser.add_argument('--gen_limit', type=int, default=50, metavar='N',
                     help='generation limit')
@@ -229,6 +229,7 @@ def rollout_pooling(s_id, params, controller):
             total_reward += reward
             if done == True: break #print early break
         total_roll += total_reward
+        envir.close()
     average_roll = -total_roll/(args.num_rolls)
     print("Average roll in id {} is {}".format(s_id, average_roll))
     return s_id, average_roll
