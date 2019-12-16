@@ -30,11 +30,11 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 24 #paper 64
-NUMBER_ROLLS = 6 #paper 16
+POPULATION_SIZE = 6 #paper 64
+NUMBER_ROLLS = 3 #paper 16
 GENERATION_LIMIT = 30 #Limit to number generations used (paper says 1800 needed)
-SCORE_LIMIT = 200 #score we want it to reach before ending (900 is what we should aim for)
-MAX_STEPS = 600 #each run should actually has 1000 steps, but this can give us time
+SCORE_LIMIT = 250 #score we want it to reach before ending (900 is what we should aim for)
+MAX_STEPS = 200 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
@@ -82,6 +82,9 @@ env.reset() #adding these two to test behaviour of background visualization
 env.render() #could it speed up?
 
 solver = cma.CMAEvolutionStrategy(99 * [0], 0.1, {'popsize': POPULATION_SIZE,}) #876 total parameters (#99 in VAE model)
+
+logger_res = cma.CMADataLogger().register(solver) #Store and plot outside
+
 best_par_score = [] #list with best parameters and scores each round (solver format)
 best_par_score2 = [] #(my format)
 generation = 0
@@ -122,6 +125,8 @@ while True:
     solver.logger.add()
     solver.disp()
     
+    logger_res.add() #for plotting
+    
     #Solver know
     #bestsol, bestfit = solver.result()
     best = solver.result
@@ -134,6 +139,14 @@ while True:
     best_par_score.append(best)
     best_par_score2.append(best2)
     print('Best obtained: ', min_value)
+    
+    #save mid execution
+    temp_solutions = (best_par_score, best_par_score2)
+    with open('evo_vae_temp_results.pkl', 'wb') as f: #save in current folder
+        pickle.dump(temp_solutions, f)
+    
+    with open('logger_results.pkl', 'wb') as f: #save in current folder
+        pickle.dump(logger_res, f)
 
     if generation == GENERATION_LIMIT or -min_value > SCORE_LIMIT:
         #exit while loop
@@ -149,7 +162,7 @@ final_solutions = best, best2 #not sure if this assignment is allowed
 
 with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
     pickle.dump(final_solutions, f)
-#with open('evo_results.pkl', ‘rb’) as f:
+#with open('evo_results.pkl', 'rb') as f:
 #    stored_data = pickle.load(f)
 
 #env.render() #would this allow log to plot?
