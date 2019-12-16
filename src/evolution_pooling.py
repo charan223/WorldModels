@@ -20,9 +20,15 @@ import sys
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
+<<<<<<< HEAD
 parser.add_argument('--pop_size', type=int, default=64, metavar='N',
                     help='population size')
 parser.add_argument('--num_rolls', type=int, default=16, metavar='N',
+=======
+parser.add_argument('--pop_size', type=int, default=32, metavar='N',
+                    help='population size')
+parser.add_argument('--num_rolls', type=int, default=8, metavar='N',
+>>>>>>> f99462cfd6cd115e0f2b3a0909e59f3a55abbb40
                     help='number of rolls')
 parser.add_argument('--gen_limit', type=int, default=1800, metavar='N',
                     help='generation limit')
@@ -245,6 +251,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
             if done == True: break #print early break
         envir.close()
         total_roll += total_reward
+        envir.close()
     average_roll = -total_roll/(args.num_rolls)
     print("Average roll in id {} is {}".format(s_id, average_roll))
     return s_id, average_roll
@@ -253,7 +260,7 @@ if __name__ == '__main__':
 
     multiprocessing.set_start_method('spawn')
 
-    sys.stdout = open('evo_logs', 'w')
+    sys.stdout = open('evo_logs_vae_only', 'w')
 
     while True:
         generation += 1
@@ -330,7 +337,7 @@ if __name__ == '__main__':
     ##f = open('evo_results.json')
     ##final_solutions = json.load(f)
 
-    with open('evo_vae_results.pkl', 'wb') as f: #save in current folder
+    with open('evo_vae_only_results.pkl', 'wb') as f: #save in current folder
         pickle.dump(final_solutions, f)
 
 
