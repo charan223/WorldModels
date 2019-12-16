@@ -48,7 +48,8 @@ parser.add_argument('--hidden_size', type=int, default=256, metavar='N',
                     help='hidden size')
 parser.add_argument('--action_size', type=int, default=3, metavar='N',
                     help='action size')
-
+parser.add_argument('--pooling', action='store_true', default=False, metavar='N',
+                    help='true or false')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -106,7 +107,7 @@ def unflatten_parameters(params, example, device):
         idx += e_p.numel()
     return unflattened
 
-def load_parameters(params, controller):
+def load_parameters(params):
     """ Load flattened parameters into controller.
     :args params: parameters as a single 1D np array
     :args controller: module in which params is loaded
@@ -156,7 +157,7 @@ def rollout(params):
     
     #load params into controller
     if params is not None:
-        load_parameters(params, controller)
+        load_parameters(params)
 
 
     #while not done:
@@ -198,7 +199,7 @@ def rollout_pooling(s_id, params):
         
         #load params into controller
         if params is not None:
-            load_parameters(params, controller)
+            load_parameters(params)
 
         #while not done:
         while step_counter < args.max_steps:
@@ -216,7 +217,9 @@ def rollout_pooling(s_id, params):
     print("Average roll in id {%d} is {%0.4f}".format(s_id, average_roll))
     return s_id, average_roll
 
-#pool = multiprocessing.Pool(processes=args.processes)
+pool = multiprocessing.Pool(processes=args.processes)
+
+
 
 while True:
     generation += 1
@@ -224,40 +227,39 @@ while True:
     sys.stdout.flush()
     solutions = solver.ask()
 
-    #fitness_list = np.zeros(len(solutions)) #I think it is accepted
-    '''
-    fitness_list = np.zeros(len(solutions))
+    if args.pooling:
+        fitness_list = np.zeros(len(solutions))
 
-    pool_inputs = []
-    for s_id, params in enumerate(solutions):
-        pool_inputs.append((s_id, params))
-    pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
-    pool.close()
-    pool.join()
+        pool_inputs = []
+        for s_id, params in enumerate(solutions):
+            pool_inputs.append((s_id, params))
+        pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
+        pool.close()
+        pool.join()
 
-    for s_id, average_roll in pool_outputs:
-        fitness_list[s_id] = average_roll
-    '''
-    fitness_list = []
-    for i in range(0, len(solutions)): 
-    #loop for each of the solutions provided , which is
-    #determined by popsize in solver
-        print('solution (instance): ', i)
-        sys.stdout.flush()
-        #simulate agent in environment
-        total_roll = 0
-        for j in range(0, args.num_rolls):  #This could be parallelised (each instance runs its own)
-            print('    G: ', generation, 'rollout: ', j) #indent inwards?
+        for s_id, average_roll in pool_outputs:
+            fitness_list[s_id] = average_roll
+    else:
+        fitness_list = []
+        for i in range(0, len(solutions)): 
+        #loop for each of the solutions provided , which is
+        #determined by popsize in solver
+            print('solution (instance): ', i)
             sys.stdout.flush()
-            total_roll += rollout(solutions[i]) #returns cumulative score each run
-        
-        average_roll = -total_roll/(args.num_rolls)
-        #fitness_list[i] = average_roll
-        fitness_list.append(average_roll) #They should be appended in right order
+            #simulate agent in environment
+            total_roll = 0
+            for j in range(0, args.num_rolls):  #This could be parallelised (each instance runs its own)
+                print('    G: ', generation, 'rollout: ', j) #indent inwards?
+                sys.stdout.flush()
+                total_roll += rollout(solutions[i]) #returns cumulative score each run
+            
+            average_roll = -total_roll/(args.num_rolls)
+            #fitness_list[i] = average_roll
+            fitness_list.append(average_roll) #They should be appended in right order
 
-        #add function here to monitor every so often state of evo algoirthm
-        print('score: ', average_roll) 
-        sys.stdout.flush()
+            #add function here to monitor every so often state of evo algoirthm
+            print('score: ', average_roll) 
+            sys.stdout.flush()
 
     solver.tell(solutions, fitness_list)
     solver.logger.add()
