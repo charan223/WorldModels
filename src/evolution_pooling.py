@@ -20,17 +20,17 @@ import sys
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
-parser.add_argument('--pop_size', type=int, default=8, metavar='N',
+parser.add_argument('--pop_size', type=int, default=64, metavar='N',
                     help='population size')
-parser.add_argument('--num_rolls', type=int, default=2, metavar='N',
+parser.add_argument('--num_rolls', type=int, default=16, metavar='N',
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=50, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=1800, metavar='N',
                     help='generation limit')
 parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=600, metavar='N',
+parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
                     help='max steps')
-parser.add_argument('--processes', type=int, default=4, metavar='N',
+parser.add_argument('--processes', type=int, default=6, metavar='N',
                     help='number of parallel processes')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -40,7 +40,7 @@ parser.add_argument('--action_type', type=str, default="random",
                     help='policy type random or continuous')
 parser.add_argument('--vae_model_file', type=str, default="model_7.pth",
                     help='vae model filename')
-parser.add_argument('--only_vae', action='store_true', default=True,
+parser.add_argument('--only_vae', action='store_true', default=False,
                     help='if not using rnn only_vae will be True')
 parser.add_argument('--latent_size', type=int, default=32, metavar='N',
                     help='latent size')
@@ -56,7 +56,6 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
-
 
 """ Define controller """
 class Controller(nn.Module):
@@ -95,7 +94,7 @@ for controller in controllers:
 
 if not args.only_vae:
     lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
-    lstm_mdns = [LSTM_MDN() for i in range(args.pop_size)]
+    lstm_mdns = [LSTM_MDN(seq_size=1) for i in range(args.pop_size)]
     for lstm_mdn in lstm_mdns:
         load_model(lstm_model_path, lstm_mdn)
 
@@ -163,11 +162,12 @@ generation = 0
 
 
 
-def rollout(params, controller, env):
+def rollout(params, controller):
     # k is a controller instance
     # env is the car racing environment
     
-    obs = env.reset()
+    envir = gym.make('CarRacing-v0')
+    obs = envir.reset()
     #Is there another way to run the experiment without initialising
     #env.render() #for visualization, does not work well on my laptop
     
@@ -191,7 +191,7 @@ def rollout(params, controller, env):
         z, _, _ = vae.encode(batch)#Take first argument
         z_vector = z.detach()
         a = controller(z_vector)
-        obs, reward, done, _ = env.step(a.detach().numpy())
+        obs, reward, done, _ = envir.step(a.detach().numpy())
         total_reward += reward
         if done == True: break #print early break
     return total_reward
@@ -234,15 +234,16 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
             z, _, _ = vae.encode(batch)#Take first argument
             z_vector = z.detach()
             if not args.only_vae:
-                lstm_input = torch.cat(z, torch.tensor(a, dtype=torch.float))
+                lstm_input = torch.cat((z, torch.tensor(a, dtype=torch.float)))
                 _ = lstm_mdn(lstm_input.view(1, 1, 35))
                 _, hidden = lstm_mdn.hidden
-                a = controller(z_vector, hidden[0])
+                a = controller(z_vector, torch.squeeze(hidden[0]))
             else:
                 a = controller(z_vector)
             obs, reward, done, _ = envir.step(a.detach().numpy())
             total_reward += reward
             if done == True: break #print early break
+        envir.close()
         total_roll += total_reward
     average_roll = -total_roll/(args.num_rolls)
     print("Average roll in id {} is {}".format(s_id, average_roll))
@@ -287,7 +288,7 @@ if __name__ == '__main__':
                 for j in range(0, args.num_rolls):  #This could be parallelised (each instance runs its own)
                     print('    G: ', generation, 'rollout: ', j) #indent inwards?
                     sys.stdout.flush()
-                    total_roll += rollout(solutions[i]) #returns cumulative score each run
+                    total_roll += rollout(solutions[i], controller[i]) #returns cumulative score each run
             
                 average_roll = -total_roll/(args.num_rolls)
                 #fitness_list[i] = average_roll
