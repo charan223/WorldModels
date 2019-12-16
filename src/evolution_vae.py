@@ -30,11 +30,11 @@ import convVAE
 
 
 #Parameters experiment:
-POPULATION_SIZE = 6 #paper 64
-NUMBER_ROLLS = 3 #paper 16
-GENERATION_LIMIT = 30 #Limit to number generations used (paper says 1800 needed)
-SCORE_LIMIT = 250 #score we want it to reach before ending (900 is what we should aim for)
-MAX_STEPS = 200 #each run should actually has 1000 steps, but this can give us time
+POPULATION_SIZE = 4 #paper 64
+NUMBER_ROLLS = 2 #paper 16
+GENERATION_LIMIT = 3 #Limit to number generations used (paper says 1800 needed)
+SCORE_LIMIT = 200 #score we want it to reach before ending (900 is what we should aim for)
+MAX_STEPS = 150 #each run should actually has 1000 steps, but this can give us time
 
 
 device = torch.device("cpu")
@@ -75,6 +75,26 @@ def rollout(k, env):
         total_reward += reward
         if done == True: break #print early break
     return total_reward
+
+
+def score_aggregator(fitness_list):
+    
+    average_value = sum(fitness_list)/len(fitness_list)
+    best_value = min(fitness_list)
+    worst_value = max(fitness_list)
+    #score_agg.extend([])
+    score_agg =[best_value, average_value, worst_value]
+    return score_agg
+    
+def save_current_state(solver, logger, solutions, fitness_list, list_points, generation):
+    file_to_store = (solver, logger, (solutions, fitness_list, list_points, generation))
+    with open('evo_vae_{0}_pop_size_{1}_length_{2}_avg_rollout.pkl'.format(POPULATION_SIZE, MAX_STEPS, NUMBER_ROLLS), 'wb') as f:
+        pickle.dump(file_to_store, f)
+    #we need to save solver object
+    #we need to solve current fitness list and 
+    #we need to save logs
+    #name new file in terms of current gen and so on..
+    #add list of solvers..?
 
 
 env = gym.make('CarRacing-v0')
@@ -135,6 +155,9 @@ while True:
     min_value = min(fitness_list)
     min_index = fitness_list.index(min_value)
     best2 = min_value, solutions[min_index]
+    
+    max_avg_min = score_aggregator(fitness_list)
+    save_current_state(solver, logger_res, solutions, fitness_list, max_avg_min, generation)
     
     best_par_score.append(best)
     best_par_score2.append(best2)
