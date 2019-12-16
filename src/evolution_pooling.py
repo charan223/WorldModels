@@ -93,10 +93,12 @@ controllers = [Controller(args.latent_size, args.hidden_size, args.action_size, 
 for controller in controllers:
     controller.load_state_dict(controllers[0].state_dict())
 
-lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
-lstm_mdns = [LSTM_MDN() for i in range(args.pop_size)]
-for lstm_mdn in lstm_mdns:
-    load_model(lstm_model_path, lstm_mdn)
+if not args.only_vae:
+    lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
+    lstm_mdns = [LSTM_MDN() for i in range(args.pop_size)]
+    for lstm_mdn in lstm_mdns:
+        load_model(lstm_model_path, lstm_mdn)
+
 
 def unflatten_parameters(params, example, device):
     """ Unflatten parameters.
@@ -199,7 +201,7 @@ def rollout(params, controller, env):
 def multi_run_wrapper(args):
    return rollout_pooling(*args)
 
-def rollout_pooling(s_id, params, controller, lstm_mdn):
+def rollout_pooling(s_id, params, controller, lstm_mdn=None):
     total_roll = 0
     for i in range(args.num_rolls):
         # k is a controller instance
@@ -223,6 +225,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn):
         if params is not None:
             load_parameters(params, controller)
 
+        a = np.zeros(3,)
         #while not done:
         while step_counter < args.max_steps:
             step_counter += 1
@@ -231,7 +234,9 @@ def rollout_pooling(s_id, params, controller, lstm_mdn):
             z, _, _ = vae.encode(batch)#Take first argument
             z_vector = z.detach()
             if not args.only_vae:
-                _, hidden = lstm_mdn(z_vector)
+                lstm_input = torch.cat(z, torch.tensor(a, dtype=torch.float))
+                _ = lstm_mdn(lstm_input.view(1, 1, 35))
+                _, hidden = lstm_mdn.hidden
                 a = controller(z_vector, hidden[0])
             else:
                 a = controller(z_vector)
@@ -249,7 +254,6 @@ if __name__ == '__main__':
 
     sys.stdout = open('evo_logs', 'w')
 
-
     while True:
         generation += 1
         print('Generation: ', generation)
@@ -261,7 +265,10 @@ if __name__ == '__main__':
             fitness_list = np.zeros(len(solutions))
             pool_inputs = []
             for s_id, params in enumerate(solutions):
-                pool_inputs.append((s_id, params, controllers[s_id], lstm_mdns[s_id]))
+                if args.only_vae:
+                    pool_inputs.append((s_id, params, controllers[s_id]))
+                else:
+                    pool_inputs.append((s_id, params, controllers[s_id], lstm_mdns[s_id]))
             pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
             pool.close()
             pool.join()
