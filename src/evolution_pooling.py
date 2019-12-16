@@ -9,11 +9,12 @@ import pickle
 import argparse
 from os.path import join, exists
 from models.convVAE import ConvVAE
+from models.lstm_mdn import LSTM_MDN
 import torch
 import torch.nn as nn
 import multiprocessing
 import matplotlib.pyplot as plt
-
+from utils.train_utils import load_model
 import sys
 
 parser = argparse.ArgumentParser(description='Controller for WorldModels')
@@ -28,7 +29,7 @@ parser.add_argument('--gen_limit', type=int, default=50, metavar='N',
 parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
 parser.add_argument('--max_steps', type=int, default=600, metavar='N',
-                    help='score limit')
+                    help='max steps')
 parser.add_argument('--processes', type=int, default=4, metavar='N',
                     help='number of parallel processes')
 parser.add_argument('--no_cuda', action='store_true', default=False,
@@ -91,6 +92,13 @@ vae.load_state_dict(torch.load(vae_file, map_location=device))
 controllers = [Controller(args.latent_size, args.hidden_size, args.action_size, args.only_vae) for i in range(args.pop_size)]
 for controller in controllers:
     controller.load_state_dict(controllers[0].state_dict())
+
+if not args.only_vae:
+    lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
+    lstm_mdns = [LSTM_MDN() for i in range(args.pop_size)]
+    for lstm_mdn in lstm_mdns:
+        load_model(lstm_model_path, lstm_mdn)
+
 
 def unflatten_parameters(params, example, device):
     """ Unflatten parameters.
@@ -172,7 +180,7 @@ def rollout(params, controller, env):
     
     #load params into controller
     if params is not None:
-        load_parameters(params)
+        load_parameters(params, controller)
 
 
     #while not done:
@@ -193,7 +201,7 @@ def rollout(params, controller, env):
 def multi_run_wrapper(args):
    return rollout_pooling(*args)
 
-def rollout_pooling(s_id, params, controller):
+def rollout_pooling(s_id, params, controller, lstm_mdn=None):
     total_roll = 0
     for i in range(args.num_rolls):
         # k is a controller instance
@@ -217,6 +225,7 @@ def rollout_pooling(s_id, params, controller):
         if params is not None:
             load_parameters(params, controller)
 
+        a = np.zeros(3,)
         #while not done:
         while step_counter < args.max_steps:
             step_counter += 1
@@ -224,7 +233,13 @@ def rollout_pooling(s_id, params, controller):
             batch = torch.from_numpy(batch).permute(0,3,1,2).float()
             z, _, _ = vae.encode(batch)#Take first argument
             z_vector = z.detach()
-            a = controller(z_vector)
+            if not args.only_vae:
+                lstm_input = torch.cat(z, torch.tensor(a, dtype=torch.float))
+                _ = lstm_mdn(lstm_input.view(1, 1, 35))
+                _, hidden = lstm_mdn.hidden
+                a = controller(z_vector, hidden[0])
+            else:
+                a = controller(z_vector)
             obs, reward, done, _ = envir.step(a.detach().numpy())
             total_reward += reward
             if done == True: break #print early break
@@ -240,7 +255,6 @@ if __name__ == '__main__':
 
     sys.stdout = open('evo_logs_vae_only', 'w')
 
-
     while True:
         generation += 1
         print('Generation: ', generation)
@@ -252,7 +266,10 @@ if __name__ == '__main__':
             fitness_list = np.zeros(len(solutions))
             pool_inputs = []
             for s_id, params in enumerate(solutions):
-                pool_inputs.append((s_id, params, controllers[s_id]))
+                if args.only_vae:
+                    pool_inputs.append((s_id, params, controllers[s_id]))
+                else:
+                    pool_inputs.append((s_id, params, controllers[s_id], lstm_mdns[s_id]))
             pool_outputs = pool.map(multi_run_wrapper, pool_inputs)
             pool.close()
             pool.join()
