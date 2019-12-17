@@ -25,7 +25,7 @@ parser.add_argument('--pop_size', type=int, default=8, metavar='N',
                     help='population size')
 parser.add_argument('--num_rolls', type=int, default=2, metavar='N',
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=100, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=10, metavar='N',
                     help='generation limit')
 parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
@@ -247,7 +247,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
         envir.close()
         total_roll += total_reward
         envir.close()
-    average_roll = total_roll/(args.num_rolls)
+    average_roll = -total_roll/(args.num_rolls)
     print("Average roll in id {} is {}".format(s_id, average_roll))
     return s_id, average_roll
 
@@ -292,7 +292,7 @@ if __name__ == '__main__':
                     sys.stdout.flush()
                     total_roll += rollout(solutions[i], controller[i]) #returns cumulative score each run
             
-                average_roll = total_roll/(args.num_rolls)
+                average_roll = -total_roll/(args.num_rolls)
                 #fitness_list[i] = average_roll
                 fitness_list.append(average_roll) #They should be appended in right order
 
