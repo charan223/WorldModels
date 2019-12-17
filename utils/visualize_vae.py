@@ -19,7 +19,7 @@ def visualize_images(name, vae_file, nb_rollouts=1):
 
     vae = ConvVAE()
     state = torch.load(vae_file, map_location=device)
-    vae.load_state_dict(state['state_dict'])
+    vae.load_state_dict(state)
 
 
     with torch.no_grad():
@@ -37,5 +37,5 @@ def visualize_images(name, vae_file, nb_rollouts=1):
 if __name__ == "__main__":
 
     name = "visualize"
-    vae_file = "checkpoints/random/best.pth"
+    vae_file = "checkpoints/random/model_7.pth"
     visualize_images(name, vae_file)
