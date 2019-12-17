@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 from utils.train_utils import load_model
 import sys
 
+import cv2
+
 import controller
 
 #not sure how to use this functionality: #not that it is needed
@@ -25,8 +27,8 @@ import controller
 #box2d.AntEnv
 
 
-LATENT_SIZE = 256
-HIDDEN_SIZE = 32
+LATENT_SIZE = 32
+HIDDEN_SIZE = 256
 ACTION_SIZE = 3
 ONLY_VAE = True
 
@@ -95,7 +97,7 @@ load_parameters(best_param, controller_test)
 
 
 device = torch.device("cpu")
-vae_file = checkpoints/random/model_7.pth
+vae_file = 'checkpoints/random/model_7.pth'
 vae = ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
 
@@ -107,7 +109,7 @@ if not ONLY_VAE:
 
 #env = gym.make('MountainCar-v0')
 env = gym.make('CarRacing-v0')
-env.reset()
+obs = env.reset()
 
 
 counter = 0
@@ -115,6 +117,10 @@ counter = 0
 #s = controller.Controller #Will not work because I do not have inputs.
 #s.action_rand()
 #s.action(z,h)
+
+#just intialising
+reward = 0
+done = False
 
 for _ in range(1000):
     
@@ -132,7 +138,7 @@ for _ in range(1000):
     else:
         a = controller_test(z_vector)
     
-    obs, reward, done, _ = envir.step(a.detach().numpy())
+    obs, reward, done, _ = env.step(a.detach().numpy())
     
     
     #t = controller.Controller_Simple.action() #(not initialising this class..)
