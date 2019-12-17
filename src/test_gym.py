@@ -81,7 +81,7 @@ def load_parameters(params, controller):
         p.data.copy_(p_0)
 
 
-with open('../saved_models/evo_vae_lstm_mdn/evo_vae_32_pop_size_600_length_8_avg_rollout.pkl', 'rb') as f:
+with open('../buggy_agent.pkl', 'rb') as f:
     info_loaded = pickle.load(f)
     
 solver_state = info_loaded[0]
@@ -129,15 +129,15 @@ for _ in range(1000):
     
     batch = np.array([cv2.resize(obs, (64, 64))]).astype(np.float)/255.0
     batch = torch.from_numpy(batch).permute(0,3,1,2).float()
-    z, _, _ = vae.encode(batch)#Take first argument
-    z_vector = z.detach()
+    _, mu, _ = vae.encode(batch)#Take first argument
+    mu_vector = mu.detach()
     if not ONLY_VAE:
-        lstm_input = torch.cat((z, a.clone().detach()))
+        lstm_input = torch.cat((mu_vector, a.clone().detach()))
         _ = lstm_mdn(lstm_input.view(1, 1, 35))
         _, hidden = lstm_mdn.hidden
-        a = controller_test(z_vector, torch.squeeze(hidden[0]))
+        a = controller_test(mu_vector, torch.squeeze(hidden[0]))
     else:
-        a = controller_test(z_vector)
+        a = controller_test(mu_vector)
     
     obs, reward, done, _ = env.step(a.detach().numpy())
     
@@ -149,8 +149,3 @@ for _ in range(1000):
     #if counter % 5 == 1: print(a[1:], '\n', r,'\n', c,'\n', t) #not printing the observation
     
 env.close()
-
-print(len(a))
-print(type(a))
-print(type(a[0]))
-print(a[0].shape)

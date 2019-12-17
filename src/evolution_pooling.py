@@ -23,13 +23,13 @@ parser.add_argument('--seed', type=int, default=123, metavar='N',
 
 parser.add_argument('--pop_size', type=int, default=8, metavar='N',
                     help='population size')
-parser.add_argument('--num_rolls', type=int, default=2, metavar='N',
+parser.add_argument('--num_rolls', type=int, default=4, metavar='N',
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=10, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=30, metavar='N',
                     help='generation limit')
-parser.add_argument('--score_limit', type=int, default=900, metavar='N',
+parser.add_argument('--score_limit', type=int, default=1500, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=600, metavar='N',
+parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
                     help='max steps')
 parser.add_argument('--processes', type=int, default=4, metavar='N',
                     help='number of parallel processes')
@@ -37,9 +37,9 @@ parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--vae_model_path', type=str, default="checkpoints",
                     help='folder of vae model')
-parser.add_argument('--action_type', type=str, default="random",
+parser.add_argument('--action_type', type=str, default="",
                     help='policy type random or continuous')
-parser.add_argument('--vae_model_file', type=str, default="model_7.pth",
+parser.add_argument('--vae_model_file', type=str, default="final.pth",
                     help='vae model filename')
 parser.add_argument('--only_vae', action='store_true', default=False,
                     help='if not using rnn only_vae will be True')
@@ -232,15 +232,15 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
             step_counter += 1
             batch = np.array([cv2.resize(obs, (64, 64))]).astype(np.float)/255.0
             batch = torch.from_numpy(batch).permute(0,3,1,2).float()
-            z, _, _ = vae.encode(batch)#Take first argument
-            z_vector = z.detach()
+            _, mu, _ = vae.encode(batch)#Take first argument
+            mu_vector = mu.detach()
             if not args.only_vae:
-                lstm_input = torch.cat((z, a.clone().detach()))
+                lstm_input = torch.cat((mu_vector, a.clone().detach()))
                 _ = lstm_mdn(lstm_input.view(1, 1, 35))
                 _, hidden = lstm_mdn.hidden
-                a = controller(z_vector, torch.squeeze(hidden[0]))
+                a = controller(mu_vector, torch.squeeze(hidden[0]))
             else:
-                a = controller(z_vector)
+                a = controller(mu_vector)
             obs, reward, done, _ = envir.step(a.detach().numpy())
             total_reward += reward
             if done == True: break #print early break
