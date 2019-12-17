@@ -21,17 +21,17 @@ parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
 
-parser.add_argument('--pop_size', type=int, default=8, metavar='N',
+parser.add_argument('--pop_size', type=int, default=28, metavar='N',
                     help='population size')
 parser.add_argument('--num_rolls', type=int, default=4, metavar='N',
                     help='number of rolls')
 parser.add_argument('--gen_limit', type=int, default=30, metavar='N',
                     help='generation limit')
-parser.add_argument('--score_limit', type=int, default=1500, metavar='N',
+parser.add_argument('--score_limit', type=int, default=900, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
+parser.add_argument('--max_steps', type=int, default=800, metavar='N',
                     help='max steps')
-parser.add_argument('--processes', type=int, default=4, metavar='N',
+parser.add_argument('--processes', type=int, default=6, metavar='N',
                     help='number of parallel processes')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
