@@ -30,7 +30,7 @@ import controller
 LATENT_SIZE = 32
 HIDDEN_SIZE = 256
 ACTION_SIZE = 3
-ONLY_VAE = True
+ONLY_VAE = False
 
 
 class Controller(nn.Module):
@@ -81,7 +81,7 @@ def load_parameters(params, controller):
         p.data.copy_(p_0)
 
 
-with open('evo_vae_28_pop_size_800_length_4_avg_rollout.pkl', 'rb') as f:
+with open('../saved_models/evo_vae_lstm_mdn/evo_vae_32_pop_size_600_length_8_avg_rollout.pkl', 'rb') as f:
     info_loaded = pickle.load(f)
     
 solver_state = info_loaded[0]
@@ -97,13 +97,13 @@ load_parameters(best_param, controller_test)
 
 
 device = torch.device("cpu")
-vae_file = 'checkpoints/random/model_7.pth'
+vae_file = '../checkpoints/random/model_7.pth'
 vae = ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
 
 if not ONLY_VAE:
-    lstm_model_path = "src/saved_models/lstm/49500/1576236505.pth.tar"
-    lstm_mdn = LSTM_MDN()
+    lstm_model_path = "../src/saved_models/lstm/49500/1576236505.pth.tar"
+    lstm_mdn = LSTM_MDN(seq_size=1)
     load_model(lstm_model_path, lstm_mdn)
 
 
@@ -122,6 +122,7 @@ counter = 0
 reward = 0
 done = False
 
+a = torch.zeros(3,)
 for _ in range(1000):
     
     env.render()
@@ -131,7 +132,7 @@ for _ in range(1000):
     z, _, _ = vae.encode(batch)#Take first argument
     z_vector = z.detach()
     if not ONLY_VAE:
-        lstm_input = torch.cat((z, torch.tensor(a, dtype=torch.float)))
+        lstm_input = torch.cat((z, a.clone().detach()))
         _ = lstm_mdn(lstm_input.view(1, 1, 35))
         _, hidden = lstm_mdn.hidden
         a = controller_test(z_vector, torch.squeeze(hidden[0]))
