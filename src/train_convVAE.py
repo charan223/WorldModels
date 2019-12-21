@@ -127,7 +127,7 @@ def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
                     frm_id = np.random.randint(ep_length - (nb_frames - 1) * frame_gap)
                     start_idx = rollout_id * ep_length + frm_id
                     frms = [obs[start_idx + i * frame_gap] for i in range(nb_frames)]
-                    batch = [np.concatenate(frms, axis=0)]
+                    batch = np.array([np.concatenate(frms, axis=2)])
                 else:
                     batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
@@ -178,7 +178,7 @@ def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
     train_loss_arr.append(train_loss)
     return train_loss_arr
 
-def test(epoch, data_folder, test_loss_arr):
+def test(epoch, data_folder, test_loss_arr, nb_frames=1, frame_gap=5):
 
     assert join(args.model_path, args.action_type)
 
@@ -216,36 +216,55 @@ def test(epoch, data_folder, test_loss_arr):
                 # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
                 obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
                 
-                for batch_idx in range(num_batches):
-                    batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
+                if nb_frames == 1:
+                    for batch_idx in range(num_batches):
+                        batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
-                    # as the input pixels lie between 0, 1
-                    batch_obs = batch.astype(np.float)/255.0
+                        # as the input pixels lie between 0, 1
+                        batch_obs = batch.astype(np.float)/255.0
 
-                    batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
-                    batch_obs = (batch_obs).to(device)
-                    batch_recon_obs, mu, logvar = model(batch_obs)
+                        batch_obs = torch.from_numpy(batch_obs).permute(0,3,1,2).float()
+                        batch_obs = batch_obs.to(device)
+                        batch_recon_obs, mu, logvar = model(batch_obs)
 
-                    test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
+                        test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
                     
-                    #if batch_idx < 3:
-                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
-                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)             
+                        #if batch_idx < 3:
+                        #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
+                        #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)
 
-        test_loss = test_loss / (test_rollouts * ep_length)
+                else:
+                    for rollout_id in batch_rollout_size:
+                        for frm_id in range(ep_length - (nb_frames - 1) * frame_gap):
+                            start_idx = rollout_id * ep_length + frm_id
+                            frms = [obs[start_idx + i * frame_gap] for i in range(nb_frames)]
+                            batch = np.array([np.concatenate(frms, axis=2)])
+                            batch_obs = batch.astype(np.float) / 255.0
+
+                            batch_obs = torch.from_numpy(batch_obs).permute(0, 3, 1, 2).float()
+                            batch_obs = batch_obs.to(device)
+                            batch_recon_obs, mu, logvar = model(batch_obs)
+
+                            test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
+
+        if nb_frames == 1:
+            test_loss = test_loss / (test_rollouts * ep_length)
+        else:
+            test_loss = test_loss / (test_rollouts * (ep_length - (nb_frames - 1) * frame_gap))
         logger.info('====> Test set loss: {:.4f}'.format(test_loss))
         test_loss_arr.append(test_loss)
         return test_loss_arr
 
 
 
-data_folder = join("data/carracing" , args.action_type)
+#data_folder = join("data/carracing" , args.action_type)
+data_folder = os.path.join('..', 'data', 'carracing')
 assert exists(data_folder)
 train_loss_arr, test_loss_arr = [], []
 cur_best = None
 for epoch in range(1, args.epochs + 1):
-        train_loss_arr = train(epoch, data_folder, train_loss_arr)
-        test_loss_arr = test(epoch, data_folder, test_loss_arr)
+        train_loss_arr = train(epoch, data_folder, train_loss_arr, nb_frames=5, frame_gap=5)
+        test_loss_arr = test(epoch, data_folder, test_loss_arr, nb_frames=5, frame_gap=5)
         test_loss = test_loss_arr[len(test_loss_arr)-1]
         
         # checkpointing
