@@ -16,7 +16,7 @@ from utils.train_utils import save_model, load_model
 parser = argparse.ArgumentParser(description='ConvVAE for WorldModels')
 parser.add_argument('--batch_size', type=int, default=1, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=1, metavar='N',
+parser.add_argument('--epochs', type=int, default=2, metavar='N',
                     help='number of epochs to train (default: 1)')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -84,7 +84,7 @@ def loss_function(recon_x, x, mu, logvar):
 
     return L2_Loss + KL_Loss
 
-def train(epoch, data_folder, train_loss_arr):
+def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
 
     assert join(args.model_path, args.action_type)
 
@@ -119,9 +119,17 @@ def train(epoch, data_folder, train_loss_arr):
             obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
 
             # perform shuffling only in train
-            np.random.shuffle(obs)
+            if nb_frames == 1:
+                np.random.shuffle(obs)
             for batch_idx in range(num_batches):
-                batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
+                if nb_frames != 1:
+                    rollout_id = np.random.randint(int(batch_rollout_size))
+                    frm_id = np.random.randint(ep_length - (nb_frames - 1) * frame_gap)
+                    start_idx = rollout_id * ep_length + frm_id
+                    frms = [obs[start_idx + i * frame_gap] for i in range(nb_frames)]
+                    batch = [np.concatenate(frms, axis=0)]
+                else:
+                    batch = obs[batch_idx * args.batch_size : (batch_idx + 1) * args.batch_size]
 
                 #add random flipping
                 flip = np.random.choice([0,1], 1, p=[0.5,0.5])[0]                

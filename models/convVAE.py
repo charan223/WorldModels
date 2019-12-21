@@ -9,13 +9,14 @@ from torchvision.utils import save_image
 class ConvVAE(nn.Module):
     #Input to ConvVAE is resized to 64 * 64 * 3, each pixel has 3 float values
     # between 0, 1 to represent each of RGB channels
-    def __init__(self, N_z=32, batch_size=1):
+    def __init__(self, N_z=32, batch_size=1, nb_frames=5):
         super(ConvVAE, self).__init__()
 
         self.N_z = N_z
         self.batch_size = batch_size
+        self.nb_frames = nb_frames
 
-        self.conv1 = nn.Conv2d(3, 32, 4, stride = 2)
+        self.conv1 = nn.Conv2d(3 * nb_frames, 32, 4, stride = 2)
         self.conv2 = nn.Conv2d(32, 64, 4, stride = 2)
         self.conv3 = nn.Conv2d(64, 128, 4, stride = 2)
         self.conv4 = nn.Conv2d(128, 256, 4, stride = 2)
@@ -23,7 +24,7 @@ class ConvVAE(nn.Module):
         self.deconv1 = nn.ConvTranspose2d(1024, 128, 5, stride = 2)
         self.deconv2 = nn.ConvTranspose2d(128, 64, 5, stride = 2)
         self.deconv3 = nn.ConvTranspose2d(64, 32, 6, stride = 2)
-        self.deconv4 = nn.ConvTranspose2d(32, 3, 6, stride = 2)
+        self.deconv4 = nn.ConvTranspose2d(32, 3 * nb_frames, 6, stride = 2)
 
         self.fc1 = nn.Linear(2 * 2 * 256, self.N_z)
         self.fc2 = nn.Linear(2 * 2 * 256, self.N_z)

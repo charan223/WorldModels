@@ -31,6 +31,7 @@ LATENT_SIZE = 32
 HIDDEN_SIZE = 256
 ACTION_SIZE = 3
 ONLY_VAE = False
+TRAINED = False
 
 
 class Controller(nn.Module):
@@ -80,8 +81,11 @@ def load_parameters(params, controller):
     for p, p_0 in zip(controller.parameters(), params):
         p.data.copy_(p_0)
 
-
-with open('../buggy_agent.pkl', 'rb') as f:
+if not TRAINED:
+    f_name = '../Evo_vae_untrained_lstm_28_4_800.pkl'
+else:
+    f_name = '../Evo_vae_trained_lstm_28_4_800.pkl'
+with open(f_name, 'rb') as f:
     info_loaded = pickle.load(f)
     
 solver_state = info_loaded[0]
@@ -97,14 +101,17 @@ load_parameters(best_param, controller_test)
 
 
 device = torch.device("cpu")
-vae_file = '../checkpoints/random/model_7.pth'
+vae_file = '../checkpoints/final.pth'
 vae = ConvVAE()
 vae.load_state_dict(torch.load(vae_file, map_location=device))
 
 if not ONLY_VAE:
-    lstm_model_path = "../src/saved_models/lstm/49500/1576236505.pth.tar"
     lstm_mdn = LSTM_MDN(seq_size=1)
-    load_model(lstm_model_path, lstm_mdn)
+    if not TRAINED:
+        lstm_mdn.load_state_dict(torch.load('../saved_lstm_init.pth.tar')())
+    else:
+        lstm_model_path = "../src/saved_models/lstm/49500/1576236505.pth.tar"
+        load_model(lstm_model_path, lstm_mdn)
 
 
 #env = gym.make('MountainCar-v0')
