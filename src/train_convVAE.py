@@ -164,12 +164,12 @@ def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
             
             # TO DO SAVE MODEL HERE
             #torch.save(model.state_dict(), join(model_path, model_file))
-            save_checkpoint({
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                'precision': test_loss,
-                'optimizer': optimizer.state_dict()
-            }, False, filename, None)
+            #save_checkpoint({
+            #    'epoch': epoch,
+            #    'state_dict': model.state_dict(),
+            #    'precision': test_loss,
+            #    'optimizer': optimizer.state_dict()
+            #}, False, filename, None)
 
     train_loss = train_loss / (train_rollouts * len(obs))
 
