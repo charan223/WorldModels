@@ -21,17 +21,17 @@ parser = argparse.ArgumentParser(description='Controller for WorldModels')
 parser.add_argument('--seed', type=int, default=123, metavar='N',
                     help='seed value')
 
-parser.add_argument('--pop_size', type=int, default=28, metavar='N',
+parser.add_argument('--pop_size', type=int, default=32, metavar='N',
                     help='population size')
 parser.add_argument('--num_rolls', type=int, default=4, metavar='N',
                     help='number of rolls')
-parser.add_argument('--gen_limit', type=int, default=30, metavar='N',
+parser.add_argument('--gen_limit', type=int, default=50, metavar='N',
                     help='generation limit')
-parser.add_argument('--score_limit', type=int, default=900, metavar='N',
+parser.add_argument('--score_limit', type=int, default=1500, metavar='N',
                     help='score limit')
-parser.add_argument('--max_steps', type=int, default=800, metavar='N',
+parser.add_argument('--max_steps', type=int, default=1000, metavar='N',
                     help='max steps')
-parser.add_argument('--processes', type=int, default=6, metavar='N',
+parser.add_argument('--processes', type=int, default=8, metavar='N',
                     help='number of parallel processes')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -41,7 +41,7 @@ parser.add_argument('--action_type', type=str, default="",
                     help='policy type random or continuous')
 parser.add_argument('--vae_model_file', type=str, default="final.pth",
                     help='vae model filename')
-parser.add_argument('--only_vae', action='store_true', default=False,
+parser.add_argument('--only_vae', action='store_true', default=True,
                     help='if not using rnn only_vae will be True')
 parser.add_argument('--latent_size', type=int, default=32, metavar='N',
                     help='latent size')
@@ -202,7 +202,7 @@ def rollout(params, controller):
 def multi_run_wrapper(args):
    return rollout_pooling(*args)
 
-def rollout_pooling(s_id, params, controller, lstm_mdn=None):
+def rollout_pooling(s_id, params, controller, lstm_mdn=None, nb_frames=1, frame_gap=5):
     total_roll = 0
     for i in range(args.num_rolls):
         # k is a controller instance
@@ -210,6 +210,7 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
 
         envir = gym.make('CarRacing-v0')
         obs = envir.reset()
+        batch = [(cv2.resize(obs, (64, 64))).astype(np.float)/255.0 for _ in range((nb_frames - 1) * frame_gap + 1)]
         #Is there another way to run the experiment without initialising
         #env.render() #for visualization, does not work well on my laptop
         #screen = env.render(mode='rgb_array') #could it speed up?
@@ -230,9 +231,12 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
         #while not done:
         while step_counter < args.max_steps:
             step_counter += 1
-            batch = np.array([cv2.resize(obs, (64, 64))]).astype(np.float)/255.0
-            batch = torch.from_numpy(batch).permute(0,3,1,2).float()
-            _, mu, _ = vae.encode(batch)#Take first argument
+            batch.append((cv2.resize(obs, (64, 64))).astype(np.float)/255.0)
+            batch.pop(0)
+            input_frms = [batch[i] for i in range((nb_frames - 1) * frame_gap, -1, - frame_gap)]
+            vae_input = np.array([np.concatenate(input_frms, axis=2)])
+            vae_input = torch.from_numpy(vae_input).permute(0,3,1,2).float()
+            _, mu, _ = vae.encode(vae_input)#Take first argument
             mu_vector = mu.detach()
             if not args.only_vae:
                 lstm_input = torch.cat((mu_vector, a.clone().detach()))
