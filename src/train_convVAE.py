@@ -16,7 +16,7 @@ from utils.train_utils import save_model, load_model
 parser = argparse.ArgumentParser(description='ConvVAE for WorldModels')
 parser.add_argument('--batch_size', type=int, default=1, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--epochs', type=int, default=2, metavar='N',
+parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 1)')
 parser.add_argument('--no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
@@ -123,6 +123,8 @@ def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
                 np.random.shuffle(obs)
             for batch_idx in range(num_batches):
                 if nb_frames != 1:
+                    if (batch_idx % 10) != 0:
+                        continue
                     rollout_id = np.random.randint(int(batch_rollout_size))
                     frm_id = np.random.randint(ep_length - (nb_frames - 1) * frame_gap)
                     start_idx = rollout_id * ep_length + frm_id
@@ -170,6 +172,7 @@ def train(epoch, data_folder, train_loss_arr, nb_frames=1, frame_gap=5):
             #    'precision': test_loss,
             #    'optimizer': optimizer.state_dict()
             #}, False, filename, None)
+
 
     train_loss = train_loss / (train_rollouts * len(obs))
 
@@ -234,7 +237,7 @@ def test(epoch, data_folder, test_loss_arr, nb_frames=1, frame_gap=5):
                         #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)
 
                 else:
-                    for rollout_id in batch_rollout_size:
+                    for rollout_id in range(batch_rollout_size):
                         for frm_id in range(ep_length - (nb_frames - 1) * frame_gap):
                             start_idx = rollout_id * ep_length + frm_id
                             frms = [obs[start_idx + i * frame_gap] for i in range(nb_frames)]
@@ -263,13 +266,13 @@ assert exists(data_folder)
 train_loss_arr, test_loss_arr = [], []
 cur_best = None
 for epoch in range(1, args.epochs + 1):
-        train_loss_arr = train(epoch, data_folder, train_loss_arr, nb_frames=5, frame_gap=5)
+        train_loss_arr = train(epoch, data_folder, train_loss_arr, nb_frames=5, frame_gap=5)*
         test_loss_arr = test(epoch, data_folder, test_loss_arr, nb_frames=5, frame_gap=5)
         test_loss = test_loss_arr[len(test_loss_arr)-1]
         
         # checkpointing
-        best_filename = join(args.model_path, args.action_type, 'best.pth')
-        filename = join(args.model_path, args.action_type, 'checkpoint_' + str(epoch) + '.pth')
+        best_filename = join('..', args.model_path, args.action_type, 'best.pth')
+        filename = join('..', args.model_path, args.action_type, 'checkpoint_' + str(epoch) + '.pth')
         
         is_best = not cur_best or test_loss < cur_best
         if is_best:
