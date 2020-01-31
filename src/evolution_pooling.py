@@ -99,7 +99,7 @@ if not args.only_vae:
     for lstm_mdn in lstm_mdns:
         load_model(lstm_model_path, lstm_mdn)
 
-
+#took below function from ctallec repo
 def unflatten_parameters(params, example, device):
     """ Unflatten parameters.
     :args params: parameters as a single 1D np array
@@ -116,6 +116,7 @@ def unflatten_parameters(params, example, device):
         idx += e_p.numel()
     return unflattened
 
+ #took below function from ctallec repo
 def load_parameters(params, controller):
     """ Load flattened parameters into controller.
     :args params: parameters as a single 1D np array
