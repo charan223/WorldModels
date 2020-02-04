@@ -7,7 +7,10 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
 class ConvVAE(nn.Module):
-    #Input to ConvVAE is resized to 64 * 64 * 3, each pixel has 3 float values
+    """ Convolutional Variational Autoencoder class
+    """
+    # input to ConvVAE is resized to 64 * 64 * 3, 
+    # each pixel has 3 float values
     # between 0, 1 to represent each of RGB channels
     def __init__(self, N_z=32, batch_size=1):
         super(ConvVAE, self).__init__()
@@ -31,6 +34,9 @@ class ConvVAE(nn.Module):
         self.fc3 = nn.Linear(self.N_z, 1024)
 
     def encode(self, x):
+        """Encodes the input and returns the encoded vector
+        :args x: input vector
+        """
         h1 = F.relu(self.conv1(x))
         h2 = F.relu(self.conv2(h1))
         h3 = F.relu(self.conv3(h2))
@@ -39,7 +45,8 @@ class ConvVAE(nn.Module):
         mu = self.fc1(h4)
         logvar = self.fc2(h4)
 
-        # we take log of var as sigma cannot be negative while neural network can output negative values
+        # we take log of var as sigma cannot be negative 
+        # while neural network can output negative values
         sigma = torch.exp(logvar * 0.5)
 
         normal = torch.randn_like(sigma)
@@ -47,6 +54,9 @@ class ConvVAE(nn.Module):
         return mu + sigma * normal, mu, logvar
 
     def decode(self, z):
+        """Decodes an encoded vector
+        :args z: encoded vector from encode function
+        """
         l1 = self.fc3(z)
         l1 = l1.unsqueeze(0).unsqueeze(0).unsqueeze(0).permute(0,3,1,2)
         h1 = F.relu(self.deconv1(l1))
@@ -55,6 +65,9 @@ class ConvVAE(nn.Module):
         return torch.sigmoid(self.deconv4(h3))
 
     def forward(self, x):
+        """ Performs a forward pass (i.e., encoding and decoding)
+        :args x: input vector
+        """
         z, mu, logvar = self.encode(x)
         return self.decode(z), mu, logvar
 

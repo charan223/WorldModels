@@ -58,7 +58,6 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
 
-""" Define controller """
 class Controller(nn.Module):
     """ Controller """
     def __init__(self, latent_size, hidden_size, action_size, only_vae):
@@ -130,25 +129,26 @@ def load_parameters(params, controller):
         p.data.copy_(p_0)
 
 def score_aggregator(fitness_list):
+    """ aggregate the scores
+    :args fitness_list: list of average rolls
+    :returns: aggregate of the scores
+    """
     average_value = sum(fitness_list)/len(fitness_list)
     best_value = min(fitness_list)
     worst_value = max(fitness_list)
-    #score_agg.extend([])
     score_agg =[best_value, average_value, worst_value]
     return score_agg
     
 def save_current_state(solver, logger, solutions, fitness_list, list_points, generation):
+    """ Saves current state
+    :args solver: 
+    :args logger: logger for logging
+    :args solutions: solutions
+    """
     file_to_store = (solver, logger, (solutions, fitness_list, list_points, generation))
     with open('evo_vae_{0}_pop_size_{1}_length_{2}_avg_rollout.pkl'.format(args.pop_size, args.max_steps, args.num_rolls), 'wb') as f:
         pickle.dump(file_to_store, f)
 
-
-#env = gym.make('CarRacing-v0')
-#x = env.reset() #adding these two to test behaviour of background visualization
-
-#screen = env.render(mode='rgb_array') #could it speed up?
-#plt.imshow(screen)
-#plt.show()
 
 parameters = controllers[0].parameters()
 
@@ -158,23 +158,19 @@ solver = cma.CMAEvolutionStrategy(torch.cat([p.detach().view(-1) for p in parame
 logger_res = cma.CMADataLogger().register(solver) 
 score_point_gen = []
 
-best_par_score = [] #list with best parameters and scores each round (solver format)
-best_par_score2 = [] #(my format)
+# list with best parameters and scores each round (solver format)
+best_par_score = [] 
+#(my format)
+best_par_score2 = [] 
 generation = 0
 
 
 
 def rollout(params, controller):
-    # k is a controller instance
-    # env is the car racing environment
     
     envir = gym.make('CarRacing-v0')
     obs = envir.reset()
-    #Is there another way to run the experiment without initialising
-    #env.render() #for visualization, does not work well on my laptop
-    
-    #I am considering putting our own counter to easily change the length of rollouts (reduce them)
-    #I counted 1000 steps, I reduced it to 100
+
     step_counter = 0
     
     done = False
@@ -184,18 +180,16 @@ def rollout(params, controller):
     if params is not None:
         load_parameters(params, controller)
 
-
-    #while not done:
     while step_counter < args.max_steps:
         step_counter += 1
         batch = np.array([cv2.resize(obs, (64, 64))]).astype(np.float)/255.0
         batch = torch.from_numpy(batch).permute(0,3,1,2).float()
-        z, _, _ = vae.encode(batch)#Take first argument
+        z, _, _ = vae.encode(batch)
         z_vector = z.detach()
         a = controller(z_vector)
         obs, reward, done, _ = envir.step(a.detach().numpy())
         total_reward += reward
-        if done == True: break #print early break
+        if done == True: break
     return total_reward
 
 
@@ -205,19 +199,10 @@ def multi_run_wrapper(args):
 
 def rollout_pooling(s_id, params, controller, lstm_mdn=None):
     total_roll = 0
-    for i in range(args.num_rolls):
-        # k is a controller instance
-        # env is the car racing environment
-
+    for _ in range(args.num_rolls):
         envir = gym.make('CarRacing-v0')
         obs = envir.reset()
-        #Is there another way to run the experiment without initialising
-        #env.render() #for visualization, does not work well on my laptop
-        #screen = env.render(mode='rgb_array') #could it speed up?
-        #plt.imshow(screen)
-        #plt.show()
-        #I am considering putting our own counter to easily change the length of rollouts (reduce them)
-        #I counted 1000 steps, I reduced it to 100
+
         step_counter = 0
         
         done = False
@@ -228,12 +213,11 @@ def rollout_pooling(s_id, params, controller, lstm_mdn=None):
             load_parameters(params, controller)
 
         a = torch.zeros(3,)
-        #while not done:
         while step_counter < args.max_steps:
             step_counter += 1
             batch = np.array([cv2.resize(obs, (64, 64))]).astype(np.float)/255.0
             batch = torch.from_numpy(batch).permute(0,3,1,2).float()
-            _, mu, _ = vae.encode(batch)#Take first argument
+            _, mu, _ = vae.encode(batch)
             mu_vector = mu.detach()
             if not args.only_vae:
                 lstm_input = torch.cat((mu_vector, a.clone().detach()))
@@ -310,7 +294,6 @@ if __name__ == '__main__':
         save_current_state(solver, logger_res, solutions, fitness_list, score_point_gen, generation)
     
         #Solver know
-        #bestsol, bestfit = solver.result()
         best = solver.result
     
         #my own save
@@ -322,25 +305,16 @@ if __name__ == '__main__':
         print('Best obtained: ', min_value)
         sys.stdout.flush()
         if generation == args.gen_limit or -min_value > args.score_limit:
-            #exit while loop
-            #put condition appropiate
             break
 
-    final_solutions = best, best2 #not sure if this assignment is allowed
+    final_solutions = best, best2 
 
-    #with open('evo_results.json', 'w') as f: #Seems not to be working
-    #    json.dump(final_solutions, f)
-    ##f = open('evo_results.json')
-    ##final_solutions = json.load(f)
-
-    with open('evo_vae_only_results.pkl', 'wb') as f: #save in current folder
+    # save the solutions
+    with open('evo_vae_only_results.pkl', 'wb') as f:
         pickle.dump(final_solutions, f)
-
 
     print('end')
 
     sys.stdout.flush()
     solver.result_pretty()
     solver.logger.plot()
-    #scma.plot()
-    #solver.plot()

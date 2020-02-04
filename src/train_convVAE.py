@@ -44,6 +44,7 @@ parser.add_argument('--log_path', type=str, default='logs', metavar='N',
                     help='checkpoints paths')
 parser.add_argument('--action_type', type=str, default='random', metavar='N',
                     help='random or continuous')
+
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -51,8 +52,6 @@ logging.basicConfig(filename=join(args.log_path, args.action_type, args.log_file
 logger = logging.getLogger('vae_train')
 
 torch.manual_seed(args.seed)
-# Fix numeric divergence due to bug in Cudnn (from ctallec repo)
-#torch.backends.cudnn.benchmark = True
 
 #for random flipping, shuffling
 np.random.seed(100)
@@ -63,7 +62,6 @@ device = torch.device("cuda" if args.cuda else "cpu")
 model = ConvVAE(N_z=args.N_z,
               batch_size=args.batch_size).to(device)
 
-#Added scheduler to control learning rate(from ctallec repo)
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
 def save_checkpoint(state, is_best, filename, best_filename):
@@ -72,8 +70,13 @@ def save_checkpoint(state, is_best, filename, best_filename):
         torch.save(state, best_filename)
 
 # L2 Loss + KL Loss as suggested in paper and are summed over all elements and batch
+# taken from ctallec repo and modified
 def loss_function(recon_x, x, mu, logvar):
-
+    """ Loss function 
+    :args recon_x: reconstructed image
+    :args x: image
+    :args logvar: logarithm of variance 
+    """
     L2_Loss = F.mse_loss(x, recon_x, reduction='sum')
 
     # see Appendix B from VAE paper:
@@ -84,14 +87,16 @@ def loss_function(recon_x, x, mu, logvar):
 
     return L2_Loss + KL_Loss
 
-def train(epoch, data_folder, train_loss_arr):
-
+def train(epoch, data_folder):
+    """ Train function for training in each epoch
+    :args epoch: epoch number, data_folder: folder path to data
+    :returns: train loss array after appending train loss
+    """
     assert join(args.model_path, args.action_type)
 
+    # load model
     filename = join(args.model_path, args.action_type, args.model_file)
     if exists(filename):
-        #TO DO: LOAD MODEL HERE and train code for left over rollouts
-        #model.load_state_dict(torch.load(join(model_path, model_file)))
         state = torch.load(filename)
         model.load_state_dict(state['state_dict'])
         optimizer.load_state_dict(state['optimizer'])
@@ -115,7 +120,8 @@ def train(epoch, data_folder, train_loss_arr):
     num_batches = int(ep_length * batch_rollout_size/args.batch_size)
     
     for batch_rollout in range(num_rollout_batches):
-            # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
+            # obs has 1000 * 100 frames from 100 rollouts 
+            # (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
             obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
 
             # perform shuffling only in train
@@ -154,8 +160,7 @@ def train(epoch, data_folder, train_loss_arr):
                         epoch, batch_rollout, num_rollout_batches, batch_idx * len(batch), len(obs),
                         loss.item() / len(batch)))
             
-            # TO DO SAVE MODEL HERE
-            #torch.save(model.state_dict(), join(model_path, model_file))
+            # save model here
             save_checkpoint({
                 'epoch': epoch,
                 'state_dict': model.state_dict(),
@@ -170,14 +175,17 @@ def train(epoch, data_folder, train_loss_arr):
     train_loss_arr.append(train_loss)
     return train_loss_arr
 
-def test(epoch, data_folder, test_loss_arr):
+def test(epoch, data_folder):
+    """ Test function to test after training in each epoch
+    param: epoch: epoch number, data_folder: folder path to data
+    Returns test loss array after appending test loss
+    """
 
     assert join(args.model_path, args.action_type)
 
     filename = join(args.model_path, args.action_type, args.model_file)
+    # load model
     if exists(filename):
-        #TO DO: LOAD MODEL HERE and train code for left over rollouts
-        #model.load_state_dict(torch.load(join(model_path, model_file)))
         state = torch.load(filename)
         model.load_state_dict(state['state_dict'])
 
@@ -205,7 +213,8 @@ def test(epoch, data_folder, test_loss_arr):
 
     with torch.no_grad():
         for batch_rollout in range(total_rollout_batches - num_rollout_batches, total_rollout_batches):
-                # obs has 1000 * 100 frames from 100 rollouts (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
+                # obs has 1000 * 100 frames from 100 rollouts 
+                # (taking only 100 rollouts(~ 2.7 GB) due to memory constraints)
                 obs = load_data(data_folder, ep_length, batch_rollout_size, batch_rollout)
                 
                 for batch_idx in range(num_batches):
@@ -219,10 +228,6 @@ def test(epoch, data_folder, test_loss_arr):
                     batch_recon_obs, mu, logvar = model(batch_obs)
 
                     test_loss += loss_function(batch_recon_obs, batch_obs, mu, logvar).item()
-                    
-                    #if batch_idx < 3:
-                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + "_recon.jpg", np.squeeze(batch_recon_obs.permute(0,2,3,1).numpy())*255)
-                    #    cv2.imwrite("results/" + str(batch_rollout) + "_" + str(batch_idx) + ".jpg", np.squeeze(batch_obs.permute(0,2,3,1).numpy())*255)             
 
         test_loss = test_loss / (test_rollouts * ep_length)
         logger.info('====> Test set loss: {:.4f}'.format(test_loss))
@@ -236,8 +241,8 @@ assert exists(data_folder)
 train_loss_arr, test_loss_arr = [], []
 cur_best = None
 for epoch in range(1, args.epochs + 1):
-        train_loss_arr = train(epoch, data_folder, train_loss_arr)
-        test_loss_arr = test(epoch, data_folder, test_loss_arr)
+        train_loss_arr = train(epoch, data_folder)
+        test_loss_arr = test(epoch, data_folder)
         test_loss = test_loss_arr[len(test_loss_arr)-1]
         
         # checkpointing
@@ -255,6 +260,7 @@ for epoch in range(1, args.epochs + 1):
             'optimizer': optimizer.state_dict()
         }, is_best, filename, best_filename)
 
+# print training and testing loss for plotting graphs
 logger.info("Overall training loss is")
 logger.info(train_loss_arr)
 logger.info("Overall testing loss is")
