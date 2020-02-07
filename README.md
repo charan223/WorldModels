@@ -55,6 +55,10 @@ Run utils/plot_utility.ipynb file
 
 Logging from model training are available in ```logs``` folder
 
-### Saved Checkpoints
+## Saved Checkpoints
 
 Saved model checkpoints are available in ```checkpoints``` folder
+
+## References
+
+<p>We have referred <a href="https://github.com/ctallec/world-models">ctallec repo</a> </p>
